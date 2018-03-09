@@ -159,6 +159,24 @@ class GoCamModel():
             uri_list.append(t[0])
         return uri_list
 
+    def individual_label_for_uri(self, uri):
+        ind_list = []
+        graph = self.writer.writer.graph
+        for t in graph.triples((uri, RDF.type, None)):
+            if t[2] != OWL.NamedIndividual: # We know OWL.NamedIndividual triple does't contain the label so don't return it
+                ind_list.append(t[2])
+        return ind_list
+
+    def axioms_for_source(self, source, property_uri=None):
+        if property_uri is None:
+            property_uri = OWL.annotatedSource
+        axiom_list = []
+        graph = self.writer.writer.graph
+        for uri in self.uri_list_for_individual(source):
+            for t in graph.triples((None, property_uri, uri)):
+                axiom_list.append(t[0])
+        return axiom_list
+
     def find_bnode(self, triple):
         (subject,predicate,object_id) = triple
         s_triples = self.writer.writer.graph.triples((None, OWL.annotatedSource, subject))
