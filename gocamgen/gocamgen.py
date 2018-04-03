@@ -27,7 +27,7 @@ DC = Namespace("http://purl.org/dc/elements/1.1/")
 # Stealing a lot of code for this from ontobio.rdfgen:
 # https://github.com/biolink/ontobio
 
-HAS_SUPPORTING_REFERENCE = URIRef(expand_uri(evt.has_supporting_reference, cmaps=[evt._prefixmap]))
+HAS_SUPPORTING_REFERENCE = URIRef(expand_uri("dc:source"))
 ENABLED_BY = URIRef(expand_uri(ro.enabled_by))
 ENABLES = URIRef(expand_uri(ro.enables))
 INVOLVED_IN = URIRef(expand_uri(ro.involved_in))
@@ -97,7 +97,7 @@ class GoCamModel():
         self.individuals[entity_id] = entity
         return entity
 
-    def add_axiom(self, statement):
+    def add_axiom(self, statement, evidence=None):
         (source_id, property_id, target_id) = statement
         stmt_id = self.find_bnode(statement)
         if stmt_id is None:
@@ -106,13 +106,17 @@ class GoCamModel():
         self.writer.emit(stmt_id, OWL.annotatedSource, source_id)
         self.writer.emit(stmt_id, OWL.annotatedProperty, property_id)
         self.writer.emit(stmt_id, OWL.annotatedTarget, target_id)
+
+        if evidence:
+            self.add_evidence(stmt_id, evidence.evidence_code, evidence.references)
+
         return stmt_id
 
     def add_evidence(self, axiom, evidence_code, references):
-        ev = {'type' : evidence_code,
-            'has_supporting_reference' : references}
+        ev = GoCamEvidence(evidence_code, references)
         # Try finding existing evidence object containing same type and references
-        ev_id = self.writer.find_or_create_evidence_id(ev)
+        # ev_id = self.writer.find_or_create_evidence_id(ev)
+        ev_id = self.writer.create_evidence(ev)
         self.writer.emit(axiom, URIRef("http://geneontology.org/lego/evidence"), ev_id)
 
     def add_connection(self, gene_connection, source_annoton):
@@ -159,6 +163,26 @@ class GoCamModel():
             uri_list.append(t[0])
         return uri_list
 
+    def triples_by_ids(self, subject, relation_uri, object_id):
+        graph = self.writer.writer.graph
+
+        triples = []
+        if subject.__class__.__name__ == "URIRef" or subject is None:
+            subjects = [subject]
+        else:
+            subjects = self.uri_list_for_individual(subject)
+        if object_id.__class__.__name__ == "URIRef" or object_id is None:
+            objects = [object_id]
+        else:
+            objects = self.uri_list_for_individual(object_id)
+        for object_uri in objects:
+            for subject_uri in subjects:
+                # if (subject_uri, relation_uri, object_uri) in graph:
+                #     triples.append((subject_uri, relation_uri, object_uri))
+                for t in graph.triples((subject_uri, relation_uri, object_uri)):
+                    triples.append(t)
+        return triples
+
     def individual_label_for_uri(self, uri):
         ind_list = []
         graph = self.writer.writer.graph
@@ -188,6 +212,12 @@ class GoCamModel():
         bnodes = set(s_bnodes) & set(p_bnodes) & set(o_bnodes)
         if len(bnodes) > 0:
             return list(bnodes)[0]
+
+class GoCamEvidence():
+    def __init__(self, code, references):
+        self.evidence_code = code
+        self.references = references
+        self.id = None
 
 class CamTurtleRdfWriter(TurtleRdfWriter):
     def __init__(self, modeltitle):
@@ -219,27 +249,24 @@ class AnnotonCamRdfTransform(CamRdfTransform):
     
     def find_or_create_evidence_id(self, evidence):
         for existing_evidence in self.evidences:
-            if evidence["type"] == existing_evidence["type"] and set(evidence["has_supporting_reference"]) == set(existing_evidence["has_supporting_reference"]):
-                if "id" not in existing_evidence:
-                    existing_evidence["id"] = genid(base=self.writer.base + '/')
-                    self.ev_ids.append(existing_evidence["id"])
-                return existing_evidence["id"]
+            if evidence.evidence_code == existing_evidence.evidence_code and set(evidence.references) == set(existing_evidence.references):
+                if existing_evidence.id is None:
+                    existing_evidence.id = genid(base=self.writer.base + '/')
+                    self.ev_ids.append(existing_evidence.id)
+                return existing_evidence.id
+        return self.create_evidence(evidence)
+
+    def create_evidence(self, evidence):
         ev_id = genid(base=self.writer.base + '/')
-        evidence["id"] = ev_id
-        ev_cls = self.eco_class(self.uri(evidence['type']))
+        evidence.id = ev_id
+        ev_cls = self.eco_class(self.uri(evidence.evidence_code))
         self.emit_type(ev_id, OWL.NamedIndividual)
         self.emit_type(ev_id, ev_cls)
-        if 'with_support_from' in evidence:
-            for w in evidence['with_support_from']:
-                self.emit(ev_id, self.uri(evt.evidence_with_support_from), self.uri(w))
-        for ref in evidence['has_supporting_reference']:
+        for ref in evidence.references:
             o = Literal(ref) # Needs to go into Noctua like 'PMID:####' rather than full URL
             self.emit(ev_id, HAS_SUPPORTING_REFERENCE, o)
-        if 'with_support_from' in evidence:
-            for ref in evidence['with_support_from']:
-                self.emit(ev_id, self.uri(evt.evidence_with_support_from), self.uri(ref))
         self.evidences.append(evidence)
-        return evidence["id"]
+        return evidence.id
 
     def find_bnode(self, triple):
         (subject,predicate,object_id) = triple
