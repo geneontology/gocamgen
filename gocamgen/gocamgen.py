@@ -1,8 +1,6 @@
-from ontobio.rdfgen.assoc_rdfgen import CamRdfTransform, TurtleRdfWriter, RdfTransform, genid
+from ontobio.rdfgen.assoc_rdfgen import CamRdfTransform, TurtleRdfWriter, genid, prefix_context
 from ontobio.vocabulary.relations import OboRO, Evidence
 from ontobio.vocabulary.upper import UpperLevel
-from ontobio.ontol_factory import OntologyFactory
-from ontobio.assoc_factory import AssociationSetFactory
 from prefixcommons.curie_util import expand_uri
 from rdflib.namespace import OWL, RDF
 from rdflib import Literal
@@ -27,17 +25,24 @@ DC = Namespace("http://purl.org/dc/elements/1.1/")
 # Stealing a lot of code for this from ontobio.rdfgen:
 # https://github.com/biolink/ontobio
 
-HAS_SUPPORTING_REFERENCE = URIRef(expand_uri("dc:source"))
-ENABLED_BY = URIRef(expand_uri(ro.enabled_by))
-ENABLES = URIRef(expand_uri(ro.enables))
-INVOLVED_IN = URIRef(expand_uri(ro.involved_in))
-PART_OF = URIRef(expand_uri(ro.part_of))
-OCCURS_IN = URIRef(expand_uri(ro.occurs_in))
-COLOCALIZES_WITH = URIRef(expand_uri(ro.colocalizes_with))
-MOLECULAR_FUNCTION = URIRef(expand_uri(upt.molecular_function))
-REGULATES = URIRef("http://purl.obolibrary.org/obo/RO_0002211")
+
+def expand_uri_wrapper(id):
+    uri = expand_uri(id, cmaps=[prefix_context])
+    return uri
+
+
+HAS_SUPPORTING_REFERENCE = URIRef(expand_uri_wrapper("dc:source"))
+ENABLED_BY = URIRef(expand_uri_wrapper(ro.enabled_by))
+ENABLES = URIRef(expand_uri_wrapper(ro.enables))
+INVOLVED_IN = URIRef(expand_uri_wrapper(ro.involved_in))
+PART_OF = URIRef(expand_uri_wrapper(ro.part_of))
+OCCURS_IN = URIRef(expand_uri_wrapper(ro.occurs_in))
+COLOCALIZES_WITH = URIRef(expand_uri_wrapper(ro.colocalizes_with))
+MOLECULAR_FUNCTION = URIRef(expand_uri_wrapper(upt.molecular_function))
+REGULATES = URIRef(expand_uri_wrapper("RO:0002211"))
 
 now = datetime.datetime.now()
+
 
 class Annoton():
     def __init__(self, gene_info, subject_id):
@@ -54,23 +59,19 @@ class Annoton():
 
 class GoCamModel():
     relations_dict = {
-        "has_direct_input" : "RO:0002400",
-        "has input" : "RO:0002233",
-        "has_regulation_target" : "RO:0002211", # regulates
-        "regulates_activity_of" : "RO:0002578", # directly regulates
-        "with_support_from" : "RO:0002233" # has input
+        "has_direct_input": "RO:0002400",
+        "has input": "RO:0002233",
+        "has_regulation_target": "RO:0002211",  # regulates
+        "regulates_activity_of": "RO:0002578",  # directly regulates
+        "with_support_from": "RO:0002233",  # has input
+        "directly_positively_regulates": "RO:0002629",
+        "directly_negatively_regulates": "RO:0002630"
     }
 
-    def __init__(self, filepath, connection_relations=None):
-        self.filepath = filepath
-        self.modeltitle = path.basename(self.filepath)
-        # if self.modeltitle.endswith(".ttl"):
-        if path.splitext(self.filepath)[1] != ".ttl":
-            self.filepath += ".ttl"
-        else:
-            self.modeltitle = self.modeltitle[:-4]
-        cam_writer = CamTurtleRdfWriter(self.modeltitle)
+    def __init__(self, modeltitle, connection_relations=None):
+        cam_writer = CamTurtleRdfWriter(modeltitle)
         self.writer = AnnotonCamRdfTransform(cam_writer)
+        self.modeltitle = modeltitle
         self.classes = []
         self.individuals = {}   # Maintain entity-to-IRI dictionary. Prevents dup individuals but we may want dups?
         if connection_relations is None:
@@ -78,6 +79,12 @@ class GoCamModel():
         else:
             self.connection_relations = connection_relations
         self.declare_properties()
+
+    def write(self, filename):
+        if path.splitext(filename)[1] != ".ttl":
+            filename += ".ttl"
+        with open(filename, 'wb') as f:
+            self.writer.writer.serialize(destination=f)
 
     def declare_properties(self):
         # AnnotionProperty
@@ -129,7 +136,7 @@ class GoCamModel():
         uri_list = self.uri_list_for_individual(gene_connection.object_id)
         for u in uri_list:
             if gene_connection.relation in self.connection_relations:
-                rel = URIRef(expand_uri(self.connection_relations[gene_connection.relation]))
+                rel = URIRef(expand_uri_wrapper(self.connection_relations[gene_connection.relation]))
                 # Annot MF should be declared by now - don't declare object_id if object_id == annot MF?
                 try:
                     annot_mf = source_annoton.molecular_function["object"]["id"]
@@ -149,7 +156,7 @@ class GoCamModel():
         # Add enabled by stmt for object_id - this is essentially adding another annoton connecting gene-to-extension/with-MF to the model
         self.writer.emit(source_id, ENABLED_BY, source_annoton.individuals[source_annoton.enabled_by])
         self.writer.emit_axiom(source_id, ENABLED_BY, source_annoton.individuals[source_annoton.enabled_by])
-        property_id = URIRef(expand_uri(self.connection_relations[gene_connection.relation]))
+        property_id = URIRef(expand_uri_wrapper(self.connection_relations[gene_connection.relation]))
         target_id = self.individuals[gene_connection.gp_b]
         # Annotate source MF GO term NamedIndividual with relation code-target MF term URI
         self.writer.emit(source_id, property_id, target_id)
@@ -246,7 +253,8 @@ class AnnotonCamRdfTransform(CamRdfTransform):
         self.evidences = []
         self.ev_ids = []
         self.bp_id = None
-    
+
+    # TODO Remove "find" feature
     def find_or_create_evidence_id(self, evidence):
         for existing_evidence in self.evidences:
             if evidence.evidence_code == existing_evidence.evidence_code and set(evidence.references) == set(existing_evidence.references):
@@ -257,6 +265,8 @@ class AnnotonCamRdfTransform(CamRdfTransform):
         return self.create_evidence(evidence)
 
     def create_evidence(self, evidence):
+        # Use/figure out standard for creating URIs
+        # Find minerva code to generate URI, add to Noctua doc
         ev_id = genid(base=self.writer.base + '/')
         evidence.id = ev_id
         ev_cls = self.eco_class(self.uri(evidence.evidence_code))
@@ -268,6 +278,8 @@ class AnnotonCamRdfTransform(CamRdfTransform):
         self.evidences.append(evidence)
         return evidence.id
 
+    # Use only for OWLAxioms
+    # There are two of these methods. AnnotonCamRdfTransform.find_bnode and GoCamModel.find_bnode. Which one is used?
     def find_bnode(self, triple):
         (subject,predicate,object_id) = triple
         s_triples = self.writer.graph.triples((None, OWL.annotatedSource, subject))
