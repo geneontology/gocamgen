@@ -132,20 +132,31 @@ class GoCamModel():
         # if gene_connection.object_id in source_annoton.individuals:
         #     # If exists and activity has connection relation,
         #     # Look for two triples: (gene_connection.object_id, ENABLED_BY, source_annoton.enabled_by) and (gene_connection.object_id, connection_relations, anything)
+        # Annot MF should be declared by now - don't declare object_id if object_id == annot MF?
+        try:
+            annot_mf = source_annoton.molecular_function["object"]["id"]
+        except:
+            annot_mf = ""
         source_id = None
-        uri_list = self.uri_list_for_individual(gene_connection.object_id)
-        for u in uri_list:
-            if gene_connection.relation in self.connection_relations:
-                rel = URIRef(expand_uri_wrapper(self.connection_relations[gene_connection.relation]))
-                # Annot MF should be declared by now - don't declare object_id if object_id == annot MF?
-                try:
-                    annot_mf = source_annoton.molecular_function["object"]["id"]
-                except:
-                    annot_mf = ""
-                if self.writer.writer.graph.__contains__((u,rel,None)) and gene_connection.object_id != annot_mf:
+        rel = None
+        if gene_connection.relation in self.connection_relations:
+            rel = URIRef(expand_uri_wrapper(self.connection_relations[gene_connection.relation]))
+            if gene_connection.object_id in source_annoton.individuals and annot_mf == "GO:0005515":
+                # Try using already declared object
+                candidate_source_id = source_annoton.individuals[gene_connection.object_id]
+                if not self.writer.writer.graph.__contains__((candidate_source_id,rel,None)):
+                    source_id = candidate_source_id
+                else:
+                    # Nope, already used. Make a new one.
                     source_id = self.declare_individual(gene_connection.object_id)
                     source_annoton.individuals[gene_connection.object_id] = source_id
-                    break
+            else:
+                uri_list = self.uri_list_for_individual(gene_connection.object_id)
+                for u in uri_list:
+                    if self.writer.writer.graph.__contains__((u,rel,None)) and gene_connection.object_id != annot_mf:
+                        source_id = self.declare_individual(gene_connection.object_id)
+                        source_annoton.individuals[gene_connection.object_id] = source_id
+                        break
 
         if source_id is None:
             try:
@@ -158,6 +169,10 @@ class GoCamModel():
         self.writer.emit_axiom(source_id, ENABLED_BY, source_annoton.individuals[source_annoton.enabled_by])
         property_id = URIRef(expand_uri_wrapper(self.connection_relations[gene_connection.relation]))
         target_id = self.individuals[gene_connection.gp_b]
+        # If gp_b (target_id) has a protein binding MF, change relation, and target_id becomes PB MF of gp_b
+        if False: # gene_connection.object_id == "GO:0005515":
+            for pbt in self.triples_by_ids(gene_connection.object_id, ENABLED_BY, target_id):
+                target_id = pbt[0]
         # Annotate source MF GO term NamedIndividual with relation code-target MF term URI
         self.writer.emit(source_id, property_id, target_id)
         # Add axiom (Source=MF term URI, Property=relation code, Target=MF term URI)
