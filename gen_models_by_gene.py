@@ -1,6 +1,7 @@
 from gocamgen.gocamgen import AssocGoCamModel
 from ontobio.io.gpadparser import GpadParser
 from ontobio.ontol_factory import OntologyFactory
+from ontobio.ecomap import EcoMap
 import argparse
 
 
@@ -9,6 +10,9 @@ parser.add_argument('-g', '--gpad_file', help="Filepath of GPAD source with anno
 parser.add_argument('-s', '--specific_gene', help="If specified, will only translate model for annotations "
                                                   "to this specific gene")
 parser.add_argument('-n', '--max_model_limit', help="Only translate specified number of models. Mainly for testing.")
+
+acceptable_evidence_codes = ['EXP', 'IDA', 'IPI', 'IMP', 'IGI', 'IEP', 'HTP', 'HDA', 'HMP', 'HGI', 'HEP', 'ISS']
+ecomap = EcoMap()
 
 def translate_to_model(gene, assocs, ont):
     model = AssocGoCamModel(gene, assocs, ont)
@@ -28,6 +32,9 @@ assocs = gpad_parser.parse(args.gpad_file, skipheader=True)
 
 assocs_by_gene = {}
 for a in assocs:
+    evi_code = ecomap.ecoclass_to_coderef(a["evidence"]["type"])[0]
+    if evi_code not in acceptable_evidence_codes:
+        continue
     subject_id = a["subject"]["id"]
     if subject_id in assocs_by_gene:
         assocs_by_gene[subject_id].append(a)
@@ -39,7 +46,10 @@ ont = OntologyFactory().create("go")
 
 if args.specific_gene:
     # python3 gen_models_by_gene.py --gpad_file wb.gpad --specific_gene WB:WBGene00003609
-    model = translate_to_model(args.specific_gene, assocs_by_gene[args.specific_gene], ont)
+    if args.specific_gene not in assocs_by_gene:
+        print("ERROR: specific gene {} not found in filtered annotation list".format(args.specific_gene))
+    else:
+        model = translate_to_model(args.specific_gene, assocs_by_gene[args.specific_gene], ont)
 else:
     count = 0
     for gene in assocs_by_gene:
