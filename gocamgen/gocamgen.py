@@ -23,6 +23,56 @@ LAYOUT = Namespace("http://geneontology.org/lego/hint/layout/")
 PAV = Namespace('http://purl.org/pav/')
 DC = Namespace("http://purl.org/dc/elements/1.1/")
 
+### ontobio/dustine32-issue-203 in here - delete once https://github.com/biolink/ontobio/pull/281 is in ontobio ###
+def get_ancestors(ontology, go_term):
+    all_ancestors = ontology.ancestors(go_term)
+    all_ancestors.append(go_term)
+    subont = ontology.subontology(all_ancestors)
+    return subont.ancestors(go_term, relations=["subClassOf","BFO:0000050"])
+
+def is_biological_process(ontology, go_term):
+    bp_root = "GO:0008150"
+    if go_term == bp_root:
+        return True
+    ancestors = get_ancestors(ontology, go_term)
+    if bp_root in ancestors:
+        return True
+    else:
+        return False
+
+def is_molecular_function(ontology, go_term):
+    mf_root = "GO:0003674"
+    if go_term == mf_root:
+        return True
+    ancestors = get_ancestors(ontology, go_term)
+    if mf_root in ancestors:
+        return True
+    else:
+        return False
+
+def is_cellular_component(ontology, go_term):
+    cc_root = "GO:0005575"
+    if go_term == cc_root:
+        return True
+    ancestors = get_ancestors(ontology, go_term)
+    if cc_root in ancestors:
+        return True
+    else:
+        return False
+
+def go_aspect(ontology, go_term):
+    if not go_term.startswith("GO:"):
+        return None
+    else:
+        # Check ancestors for root terms
+        if is_molecular_function(ontology, go_term):
+            return 'F'
+        elif is_cellular_component(ontology, go_term):
+            return 'C'
+        elif is_biological_process(ontology, go_term):
+            return 'P'
+###################################################
+
 # Stealing a lot of code for this from ontobio.rdfgen:
 # https://github.com/biolink/ontobio
 
@@ -31,7 +81,6 @@ def expand_uri_wrapper(id):
     uri = expand_uri(id, cmaps=[prefix_context])
     return uri
 
-
 HAS_SUPPORTING_REFERENCE = URIRef(expand_uri_wrapper("dc:source"))
 ENABLED_BY = URIRef(expand_uri_wrapper(ro.enabled_by))
 ENABLES = URIRef(expand_uri_wrapper(ro.enables))
@@ -39,6 +88,7 @@ INVOLVED_IN = URIRef(expand_uri_wrapper(ro.involved_in))
 PART_OF = URIRef(expand_uri_wrapper(ro.part_of))
 OCCURS_IN = URIRef(expand_uri_wrapper(ro.occurs_in))
 COLOCALIZES_WITH = URIRef(expand_uri_wrapper(ro.colocalizes_with))
+CONTRIBUTES_TO = URIRef(expand_uri_wrapper("RO:0002326"))
 MOLECULAR_FUNCTION = URIRef(expand_uri_wrapper(upt.molecular_function))
 REGULATES = URIRef(expand_uri_wrapper("RO:0002211"))
 
@@ -231,41 +281,46 @@ class GoCamModel():
         if len(bnodes) > 0:
             return list(bnodes)[0]
 
+
 class AssocGoCamModel(GoCamModel):
-    def __init__(self, modeltitle, assocs, connection_relations=None):
+    def __init__(self, modeltitle, assocs, ontology, connection_relations=None):
         GoCamModel.__init__(self, modeltitle, connection_relations)
         self.associations = assocs
+        self.ontology = ontology
 
     def translate(self):
         for a in self.associations:
-            # self.writer.translate(a)  # Do all the initial work for me
-            # Evidence created but not hooked up to axiom
-            # Translate extensions differently
 
             annoton = Annoton(a["subject"]["id"], [a])
 
-            self.declare_class(annoton.subject_id)
-            self.declare_individual(annoton.subject_id)
+            self.declare_class(annoton.enabled_by)
+            gp_uri = self.declare_individual(annoton.enabled_by)
             term = a["object"]["id"]
             self.declare_class(term)
-            self.declare_individual(term)
+            term_uri = self.declare_individual(term)
 
-            # Axiom time! - Stealing from ontobio/rdfgen
-            aspect = a["aspect"]
+            # Paul's current rules are based on aspect, similar to rdfgen's current state, which may change
+            # since relation is explicitly stated in GPAD
+            # Standardize aspect using GPAD relations?
+
+            ### Use this commented line instead once https://github.com/biolink/ontobio/pull/281 is in ontobio ###
+            # aspect = self.ontology.go_aspect(term)
+            aspect = go_aspect(self.ontology, term)
+
             aspect_triples = []
+            # Axiom time! - Stealing from ontobio/rdfgen
             if aspect == 'F':
-                aspect_triples.append(self.emit(term, ENABLED_BY, annoton.subject_id))
+                aspect_triples.append(self.writer.emit(term_uri, ENABLED_BY, gp_uri))
             elif aspect == 'P':
-                mf_id = genid(base=self.writer.base)
-                self.emit_type(mf_id, MOLECULAR_FUNCTION)
-                aspect_triples.append(self.emit(mf_id, ENABLED_BY, annoton.subject_id))
-                aspect_triples.append(self.emit(mf_id, PART_OF, term))
+                self.declare_class(MOLECULAR_FUNCTION)
+                mf_root_uri = self.declare_individual(MOLECULAR_FUNCTION)
+                aspect_triples.append(self.writer.emit(mf_root_uri, ENABLED_BY, gp_uri))
+                aspect_triples.append(self.writer.emit(mf_root_uri, PART_OF, term_uri))
             elif aspect == 'C':
-                mf_id = genid(base=self.writer.base)
-                self.emit_type(mf_id, MOLECULAR_FUNCTION)
-                aspect_triples.append(self.emit(mf_id, ENABLED_BY, annoton.subject_id))
-                aspect_triples.append(self.emit(mf_id, OCCURS_IN, term))
-            # MF - object (GO:######) enabled_by subject (MGI:#####)
+                self.declare_class(MOLECULAR_FUNCTION)
+                mf_root_uri = self.declare_individual(MOLECULAR_FUNCTION)
+                aspect_triples.append(self.writer.emit(mf_root_uri, ENABLED_BY, gp_uri))
+                aspect_triples.append(self.writer.emit(mf_root_uri, OCCURS_IN, term_uri))
 
             # Add evidence
             for atr in aspect_triples:
@@ -325,7 +380,9 @@ class AnnotonCamRdfTransform(CamRdfTransform):
         # Find minerva code to generate URI, add to Noctua doc
         ev_id = genid(base=self.writer.base + '/')
         evidence.id = ev_id
-        ev_cls = self.eco_class(self.uri(evidence.evidence_code))
+        # ev_cls = self.eco_class(self.uri(evidence.evidence_code))
+        # ev_cls = self.eco_class(evidence.evidence_code) # This is already ECO:##### due to a GPAD being used
+        ev_cls = self.uri(evidence.evidence_code)
         self.emit_type(ev_id, OWL.NamedIndividual)
         self.emit_type(ev_id, ev_cls)
         for ref in evidence.references:
