@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="gocamgen",
-    version='0.0.3',
+    version='0.0.4',
     # packages=["gocamgen"],
     packages=find_packages(),
     author="dustine32",
