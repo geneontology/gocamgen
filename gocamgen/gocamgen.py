@@ -1,7 +1,7 @@
 from ontobio.rdfgen.assoc_rdfgen import CamRdfTransform, TurtleRdfWriter, genid, prefix_context
 from ontobio.vocabulary.relations import OboRO, Evidence
 from ontobio.vocabulary.upper import UpperLevel
-from ontobio.util.go_utils import GoAspector
+# from ontobio.util.go_utils import GoAspector
 from prefixcommons.curie_util import expand_uri
 from rdflib.namespace import OWL, RDF
 from rdflib import Literal
