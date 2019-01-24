@@ -11,7 +11,8 @@ parser.add_argument('-s', '--specific_gene', help="If specified, will only trans
                                                   "to this specific gene")
 parser.add_argument('-n', '--max_model_limit', help="Only translate specified number of models. Mainly for testing.")
 
-acceptable_evidence_codes = ['EXP', 'IDA', 'IPI', 'IMP', 'IGI', 'IEP', 'HTP', 'HDA', 'HMP', 'HGI', 'HEP', 'ISS']
+unwanted_evidence_codes = ['IEA', 'IBA']
+unwanted_evi_code_ref_combos = [('IKR', 'PMID:21873635')]
 ecomap = EcoMap()
 
 def translate_to_model(gene, assocs, ont):
@@ -25,6 +26,17 @@ def translate_to_model(gene, assocs, ont):
     print("Model for {} written to {}".format(gene, out_filename))
     return model
 
+def validate_line(assoc):
+    evi_code = ecomap.ecoclass_to_coderef(assoc["evidence"]["type"])[0]
+    if evi_code in unwanted_evidence_codes:
+        return False
+    else:
+        references = assoc["evidence"]["has_supporting_reference"]
+        for evi_ref_combo in unwanted_evi_code_ref_combos:
+            if evi_ref_combo[0] == evi_code and evi_ref_combo[1] in references:
+                return False
+        return True
+
 args = parser.parse_args()
 
 gpad_parser = GpadParser()
@@ -32,8 +44,8 @@ assocs = gpad_parser.parse(args.gpad_file, skipheader=True)
 
 assocs_by_gene = {}
 for a in assocs:
-    evi_code = ecomap.ecoclass_to_coderef(a["evidence"]["type"])[0]
-    if evi_code not in acceptable_evidence_codes:
+    # validation function
+    if not validate_line(a):
         continue
     subject_id = a["subject"]["id"]
     if subject_id in assocs_by_gene:
