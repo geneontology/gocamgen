@@ -1,6 +1,7 @@
 from ontobio.rdfgen.assoc_rdfgen import CamRdfTransform, TurtleRdfWriter, genid, prefix_context
 from ontobio.vocabulary.relations import OboRO, Evidence
 from ontobio.vocabulary.upper import UpperLevel
+from ontobio.util.go_utils import GoAspector
 from prefixcommons.curie_util import expand_uri
 from rdflib.namespace import OWL, RDF
 from rdflib import Literal
@@ -303,8 +304,9 @@ class AssocGoCamModel(GoCamModel):
             # since relation is explicitly stated in GPAD
             # Standardize aspect using GPAD relations?
 
-            ### Use this commented line instead once https://github.com/biolink/ontobio/pull/281 is in ontobio ###
-            # aspect = self.ontology.go_aspect(term)
+            ### Use these commented lines instead once https://github.com/biolink/ontobio/pull/281 is in ontobio ###
+            # aspector = GoAspector(self.ontology)
+            # aspect = aspector.go_aspect(term)
             aspect = go_aspect(self.ontology, term)
 
             aspect_triples = []
