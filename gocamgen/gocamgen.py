@@ -160,7 +160,7 @@ class GoCamModel():
         self.writer.emit_type(entity, self.writer.uri(entity_id))
         self.writer.emit_type(entity, OWL.NamedIndividual)
         self.individuals[entity_id] = entity
-        self.graph.add_node(entity, {"label": entity_id})
+        self.graph.add_node(entity, **{"label": entity_id})
         return entity
 
     def add_axiom(self, statement, evidence=None):
@@ -350,7 +350,7 @@ class CamTurtleRdfWriter(TurtleRdfWriter):
         self.graph.add((self.base, RDF.type, OWL.Ontology))
 
         # Model attributes TODO: Should move outside init
-        self.graph.add((self.base, URIRef("http://purl.org/pav/providedBy"), Literal("http://geneontology.org")))        
+        self.graph.add((self.base, URIRef("http://purl.org/pav/providedBy"), Literal("http://geneontology.org")))
         self.graph.add((self.base, DC.date, Literal(str(now.year) + "-" + str(now.month) + "-" + str(now.day))))
         self.graph.add((self.base, DC.title, Literal(modeltitle)))
         self.graph.add((self.base, DC.contributor, Literal("http://orcid.org/0000-0002-6659-0416"))) #TODO
