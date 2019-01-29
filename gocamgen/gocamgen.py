@@ -314,13 +314,13 @@ class AssocGoCamModel(GoCamModel):
             if aspect == 'F':
                 aspect_triples.append(self.writer.emit(term_uri, ENABLED_BY, gp_uri))
             elif aspect == 'P':
-                self.declare_class(MOLECULAR_FUNCTION)
-                mf_root_uri = self.declare_individual(MOLECULAR_FUNCTION)
+                self.declare_class(upt.molecular_function)
+                mf_root_uri = self.declare_individual(upt.molecular_function)
                 aspect_triples.append(self.writer.emit(mf_root_uri, ENABLED_BY, gp_uri))
                 aspect_triples.append(self.writer.emit(mf_root_uri, PART_OF, term_uri))
             elif aspect == 'C':
-                self.declare_class(MOLECULAR_FUNCTION)
-                mf_root_uri = self.declare_individual(MOLECULAR_FUNCTION)
+                self.declare_class(upt.molecular_function)
+                mf_root_uri = self.declare_individual(upt.molecular_function)
                 aspect_triples.append(self.writer.emit(mf_root_uri, ENABLED_BY, gp_uri))
                 aspect_triples.append(self.writer.emit(mf_root_uri, OCCURS_IN, term_uri))
 
