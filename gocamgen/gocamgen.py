@@ -1,7 +1,7 @@
 from ontobio.rdfgen.assoc_rdfgen import CamRdfTransform, TurtleRdfWriter, genid, prefix_context
 from ontobio.vocabulary.relations import OboRO, Evidence
 from ontobio.vocabulary.upper import UpperLevel
-# from ontobio.util.go_utils import GoAspector
+from ontobio.util.go_utils import GoAspector
 from prefixcommons.curie_util import expand_uri
 from rdflib.namespace import OWL, RDF
 from rdflib import Literal
@@ -23,56 +23,6 @@ LEGO = Namespace("http://geneontology.org/lego/")
 LAYOUT = Namespace("http://geneontology.org/lego/hint/layout/")
 PAV = Namespace('http://purl.org/pav/')
 DC = Namespace("http://purl.org/dc/elements/1.1/")
-
-### ontobio/dustine32-issue-203 in here - delete once https://github.com/biolink/ontobio/pull/281 is in ontobio ###
-def get_ancestors(ontology, go_term):
-    all_ancestors = ontology.ancestors(go_term)
-    all_ancestors.append(go_term)
-    subont = ontology.subontology(all_ancestors)
-    return subont.ancestors(go_term, relations=["subClassOf","BFO:0000050"])
-
-def is_biological_process(ontology, go_term):
-    bp_root = "GO:0008150"
-    if go_term == bp_root:
-        return True
-    ancestors = get_ancestors(ontology, go_term)
-    if bp_root in ancestors:
-        return True
-    else:
-        return False
-
-def is_molecular_function(ontology, go_term):
-    mf_root = "GO:0003674"
-    if go_term == mf_root:
-        return True
-    ancestors = get_ancestors(ontology, go_term)
-    if mf_root in ancestors:
-        return True
-    else:
-        return False
-
-def is_cellular_component(ontology, go_term):
-    cc_root = "GO:0005575"
-    if go_term == cc_root:
-        return True
-    ancestors = get_ancestors(ontology, go_term)
-    if cc_root in ancestors:
-        return True
-    else:
-        return False
-
-def go_aspect(ontology, go_term):
-    if not go_term.startswith("GO:"):
-        return None
-    else:
-        # Check ancestors for root terms
-        if is_molecular_function(ontology, go_term):
-            return 'F'
-        elif is_cellular_component(ontology, go_term):
-            return 'C'
-        elif is_biological_process(ontology, go_term):
-            return 'P'
-###################################################
 
 # Stealing a lot of code for this from ontobio.rdfgen:
 # https://github.com/biolink/ontobio
@@ -304,10 +254,10 @@ class AssocGoCamModel(GoCamModel):
             # since relation is explicitly stated in GPAD
             # Standardize aspect using GPAD relations?
 
-            ### Use these commented lines instead once https://github.com/biolink/ontobio/pull/281 is in ontobio ###
-            # aspector = GoAspector(self.ontology)
-            # aspect = aspector.go_aspect(term)
-            aspect = go_aspect(self.ontology, term)
+            aspector = GoAspector(self.ontology)
+            aspect = aspector.go_aspect(term)
+
+
 
             aspect_triples = []
             # Axiom time! - Stealing from ontobio/rdfgen
