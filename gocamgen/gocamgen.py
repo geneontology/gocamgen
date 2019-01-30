@@ -24,56 +24,6 @@ LAYOUT = Namespace("http://geneontology.org/lego/hint/layout/")
 PAV = Namespace('http://purl.org/pav/')
 DC = Namespace("http://purl.org/dc/elements/1.1/")
 
-### ontobio/dustine32-issue-203 in here - delete once https://github.com/biolink/ontobio/pull/281 is in ontobio ###
-def get_ancestors(ontology, go_term):
-    all_ancestors = ontology.ancestors(go_term)
-    all_ancestors.append(go_term)
-    subont = ontology.subontology(all_ancestors)
-    return subont.ancestors(go_term, relations=["subClassOf","BFO:0000050"])
-
-def is_biological_process(ontology, go_term):
-    bp_root = "GO:0008150"
-    if go_term == bp_root:
-        return True
-    ancestors = get_ancestors(ontology, go_term)
-    if bp_root in ancestors:
-        return True
-    else:
-        return False
-
-def is_molecular_function(ontology, go_term):
-    mf_root = "GO:0003674"
-    if go_term == mf_root:
-        return True
-    ancestors = get_ancestors(ontology, go_term)
-    if mf_root in ancestors:
-        return True
-    else:
-        return False
-
-def is_cellular_component(ontology, go_term):
-    cc_root = "GO:0005575"
-    if go_term == cc_root:
-        return True
-    ancestors = get_ancestors(ontology, go_term)
-    if cc_root in ancestors:
-        return True
-    else:
-        return False
-
-def go_aspect(ontology, go_term):
-    if not go_term.startswith("GO:"):
-        return None
-    else:
-        # Check ancestors for root terms
-        if is_molecular_function(ontology, go_term):
-            return 'F'
-        elif is_cellular_component(ontology, go_term):
-            return 'C'
-        elif is_biological_process(ontology, go_term):
-            return 'P'
-###################################################
-
 # Stealing a lot of code for this from ontobio.rdfgen:
 # https://github.com/biolink/ontobio
 
@@ -112,7 +62,10 @@ class GoCamModel():
         "with_support_from": "RO:0002233",  # has input
         "directly_regulates": "RO:0002578",
         "directly_positively_regulates": "RO:0002629",
-        "directly_negatively_regulates": "RO:0002630"
+        "directly_negatively_regulates": "RO:0002630",
+        "colocalizes_with": "RO:0002325",
+        "contributes_to": "RO:0002326",
+        "part_of": "BFO:0000050"
     }
 
     def __init__(self, modeltitle, connection_relations=None):
@@ -160,7 +113,7 @@ class GoCamModel():
         self.writer.emit_type(entity, self.writer.uri(entity_id))
         self.writer.emit_type(entity, OWL.NamedIndividual)
         self.individuals[entity_id] = entity
-        self.graph.add_node(entity, {"label": entity_id})
+        self.graph.add_node(entity, **{"label": entity_id})
         return entity
 
     def add_axiom(self, statement, evidence=None):
@@ -304,25 +257,20 @@ class AssocGoCamModel(GoCamModel):
             # since relation is explicitly stated in GPAD
             # Standardize aspect using GPAD relations?
 
-            ### Use these commented lines instead once https://github.com/biolink/ontobio/pull/281 is in ontobio ###
-            # aspector = GoAspector(self.ontology)
-            # aspect = aspector.go_aspect(term)
-            aspect = go_aspect(self.ontology, term)
-
             aspect_triples = []
-            # Axiom time! - Stealing from ontobio/rdfgen
-            if aspect == 'F':
-                aspect_triples.append(self.writer.emit(term_uri, ENABLED_BY, gp_uri))
-            elif aspect == 'P':
-                self.declare_class(MOLECULAR_FUNCTION)
-                mf_root_uri = self.declare_individual(MOLECULAR_FUNCTION)
-                aspect_triples.append(self.writer.emit(mf_root_uri, ENABLED_BY, gp_uri))
-                aspect_triples.append(self.writer.emit(mf_root_uri, PART_OF, term_uri))
-            elif aspect == 'C':
-                self.declare_class(MOLECULAR_FUNCTION)
-                mf_root_uri = self.declare_individual(MOLECULAR_FUNCTION)
-                aspect_triples.append(self.writer.emit(mf_root_uri, ENABLED_BY, gp_uri))
-                aspect_triples.append(self.writer.emit(mf_root_uri, OCCURS_IN, term_uri))
+            for q in a["qualifiers"]:
+                if q == "enables":
+                    aspect_triples.append(self.writer.emit(term_uri, ENABLED_BY, gp_uri))
+                elif q == "involved_in":
+                    self.declare_class(upt.molecular_function)
+                    mf_root_uri = self.declare_individual(upt.molecular_function)
+                    aspect_triples.append(self.writer.emit(mf_root_uri, ENABLED_BY, gp_uri))
+                    aspect_triples.append(self.writer.emit(mf_root_uri, PART_OF, term_uri))
+                elif q == "NOT":
+                    # Try it in UI and look at OWL
+                    do_stuff = 1
+                else:
+                    aspect_triples.append(self.writer.emit(gp_uri, URIRef(expand_uri_wrapper(self.relations_dict[q])), term_uri))
 
             # Add evidence
             for atr in aspect_triples:
@@ -350,7 +298,7 @@ class CamTurtleRdfWriter(TurtleRdfWriter):
         self.graph.add((self.base, RDF.type, OWL.Ontology))
 
         # Model attributes TODO: Should move outside init
-        self.graph.add((self.base, URIRef("http://purl.org/pav/providedBy"), Literal("http://geneontology.org")))        
+        self.graph.add((self.base, URIRef("http://purl.org/pav/providedBy"), Literal("http://geneontology.org")))
         self.graph.add((self.base, DC.date, Literal(str(now.year) + "-" + str(now.month) + "-" + str(now.day))))
         self.graph.add((self.base, DC.title, Literal(modeltitle)))
         self.graph.add((self.base, DC.contributor, Literal("http://orcid.org/0000-0002-6659-0416"))) #TODO
