@@ -98,10 +98,11 @@ ont = OntologyFactory().create("go")
 
 if args.specific_gene:
     # python3 gen_models_by_gene.py --gpad_file wb.gpad --specific_gene WB:WBGene00003609
-    if args.specific_gene not in assocs_by_gene:
-        print("ERROR: specific gene {} not found in filtered annotation list".format(args.specific_gene))
-    else:
-        model = translate_to_model(args.specific_gene, assocs_by_gene[args.specific_gene], ont)
+    for specific_gene in args.specific_gene.split(","):
+        if specific_gene not in assocs_by_gene:
+            print("ERROR: specific gene {} not found in filtered annotation list".format(specific_gene))
+        else:
+            model = translate_to_model(specific_gene, assocs_by_gene[specific_gene], ont)
 else:
     count = 0
     for gene in assocs_by_gene:

@@ -62,7 +62,14 @@ class GoCamModel():
         "with_support_from": "RO:0002233",  # has input
         "directly_regulates": "RO:0002578",
         "directly_positively_regulates": "RO:0002629",
-        "directly_negatively_regulates": "RO:0002630"
+        "directly_negatively_regulates": "RO:0002630",
+        "colocalizes_with": "RO:0002325",
+        "contributes_to": "RO:0002326",
+        "part_of": "BFO:0000050",
+        "acts_upstream_of": "RO:0002263",
+        "acts_upstream_of_negative_effect": "RO:0004035",
+        "acts_upstream_of_or_within": "RO:0002264",
+        "acts_upstream_of_positive_effect": "RO:0004034",
     }
 
     def __init__(self, modeltitle, connection_relations=None):
@@ -102,7 +109,8 @@ class GoCamModel():
 
     def declare_class(self, class_id):
         if class_id not in self.classes:
-            self.writer.emit_type(URIRef("http://identifiers.org/" + class_id), OWL.Class)
+            # self.writer.emit_type(URIRef("http://identifiers.org/" + class_id), OWL.Class)
+            self.writer.emit_type(URIRef(expand_uri_wrapper(class_id)), OWL.Class)
             self.classes.append(class_id)
 
     def declare_individual(self, entity_id):
@@ -254,25 +262,20 @@ class AssocGoCamModel(GoCamModel):
             # since relation is explicitly stated in GPAD
             # Standardize aspect using GPAD relations?
 
-            aspector = GoAspector(self.ontology)
-            aspect = aspector.go_aspect(term)
-
-
-
             aspect_triples = []
-            # Axiom time! - Stealing from ontobio/rdfgen
-            if aspect == 'F':
-                aspect_triples.append(self.writer.emit(term_uri, ENABLED_BY, gp_uri))
-            elif aspect == 'P':
-                self.declare_class(upt.molecular_function)
-                mf_root_uri = self.declare_individual(upt.molecular_function)
-                aspect_triples.append(self.writer.emit(mf_root_uri, ENABLED_BY, gp_uri))
-                aspect_triples.append(self.writer.emit(mf_root_uri, PART_OF, term_uri))
-            elif aspect == 'C':
-                self.declare_class(upt.molecular_function)
-                mf_root_uri = self.declare_individual(upt.molecular_function)
-                aspect_triples.append(self.writer.emit(mf_root_uri, ENABLED_BY, gp_uri))
-                aspect_triples.append(self.writer.emit(mf_root_uri, OCCURS_IN, term_uri))
+            for q in a["qualifiers"]:
+                if q == "enables":
+                    aspect_triples.append(self.writer.emit(term_uri, ENABLED_BY, gp_uri))
+                elif q == "involved_in":
+                    self.declare_class(upt.molecular_function)
+                    mf_root_uri = self.declare_individual(upt.molecular_function)
+                    aspect_triples.append(self.writer.emit(mf_root_uri, ENABLED_BY, gp_uri))
+                    aspect_triples.append(self.writer.emit(mf_root_uri, PART_OF, term_uri))
+                elif q == "NOT":
+                    # Try it in UI and look at OWL
+                    do_stuff = 1
+                else:
+                    aspect_triples.append(self.writer.emit(gp_uri, URIRef(expand_uri_wrapper(self.relations_dict[q])), term_uri))
 
             # Add evidence
             for atr in aspect_triples:
