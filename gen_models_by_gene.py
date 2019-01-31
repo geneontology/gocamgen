@@ -14,6 +14,7 @@ parser.add_argument('-m', '--mod', help="MOD rules to follow for filtering and t
 
 
 class FilterRule():
+    # Default filter - Remove IEA, IBA, as well as IKRs originating from PAINT.
     def __init__(self, unwanted_evidence_codes=['IEA', 'IBA'],
                  unwanted_evi_code_ref_combos=[('IKR', 'PMID:21873635')],
                  required_attributes=[]):
@@ -23,11 +24,13 @@ class FilterRule():
 
 
 class WBFilterRule(FilterRule):
+    # So far same as default FilterRule.
     def __init__(self):
         FilterRule.__init__(self)
 
 
 class MGIFilterRule(FilterRule):
+    # Only provided_by=MGI lines are valid, also filtering out ISOs along with default FilterRule filters.
     def __init__(self):
         FilterRule.__init__(self, required_attributes=[{"provided_by": ["MGI"]}])
         self.unwanted_evidence_codes.append('ISO')
