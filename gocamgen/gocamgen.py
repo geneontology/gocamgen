@@ -65,7 +65,11 @@ class GoCamModel():
         "directly_negatively_regulates": "RO:0002630",
         "colocalizes_with": "RO:0002325",
         "contributes_to": "RO:0002326",
-        "part_of": "BFO:0000050"
+        "part_of": "BFO:0000050",
+        "acts_upstream_of": "RO:0002263",
+        "acts_upstream_of_negative_effect": "RO:0004035",
+        "acts_upstream_of_or_within": "RO:0002264",
+        "acts_upstream_of_positive_effect": "RO:0004034",
     }
 
     def __init__(self, modeltitle, connection_relations=None):
