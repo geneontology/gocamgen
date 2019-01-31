@@ -109,7 +109,8 @@ class GoCamModel():
 
     def declare_class(self, class_id):
         if class_id not in self.classes:
-            self.writer.emit_type(URIRef("http://identifiers.org/" + class_id), OWL.Class)
+            # self.writer.emit_type(URIRef("http://identifiers.org/" + class_id), OWL.Class)
+            self.writer.emit_type(URIRef(expand_uri_wrapper(class_id)), OWL.Class)
             self.classes.append(class_id)
 
     def declare_individual(self, entity_id):
