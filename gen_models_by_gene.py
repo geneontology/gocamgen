@@ -10,9 +10,39 @@ parser.add_argument('-g', '--gpad_file', help="Filepath of GPAD source with anno
 parser.add_argument('-s', '--specific_gene', help="If specified, will only translate model for annotations "
                                                   "to this specific gene")
 parser.add_argument('-n', '--max_model_limit', help="Only translate specified number of models. Mainly for testing.")
+parser.add_argument('-m', '--mod', help="MOD rules to follow for filtering and translating.")
 
-unwanted_evidence_codes = ['IEA', 'IBA']
-unwanted_evi_code_ref_combos = [('IKR', 'PMID:21873635')]
+
+class FilterRule():
+    def __init__(self, unwanted_evidence_codes=['IEA', 'IBA'],
+                 unwanted_evi_code_ref_combos=[('IKR', 'PMID:21873635')],
+                 required_attributes=[]):
+        self.unwanted_evidence_codes = unwanted_evidence_codes
+        self.unwanted_evi_code_ref_combos = unwanted_evi_code_ref_combos
+        self.required_attributes = required_attributes
+
+
+class WBFilterRule(FilterRule):
+    def __init__(self):
+        FilterRule.__init__(self)
+
+
+class MGIFilterRule(FilterRule):
+    def __init__(self):
+        FilterRule.__init__(self, required_attributes=[{"provided_by": ["MGI"]}])
+        self.unwanted_evidence_codes.append('ISO')
+
+mod_filter_map = {
+    'WB': WBFilterRule,
+    'MGI': MGIFilterRule
+}
+
+args = parser.parse_args()
+
+if args.mod in mod_filter_map:
+    filter_rule = mod_filter_map[args.mod]()
+else:
+    filter_rule = FilterRule()
 ecomap = EcoMap()
 
 def translate_to_model(gene, assocs, ont):
@@ -28,16 +58,23 @@ def translate_to_model(gene, assocs, ont):
 
 def validate_line(assoc):
     evi_code = ecomap.ecoclass_to_coderef(assoc["evidence"]["type"])[0]
-    if evi_code in unwanted_evidence_codes:
+    if evi_code in filter_rule.unwanted_evidence_codes:
         return False
-    else:
+    if len(filter_rule.unwanted_evi_code_ref_combos) > 0:
         references = assoc["evidence"]["has_supporting_reference"]
-        for evi_ref_combo in unwanted_evi_code_ref_combos:
+        for evi_ref_combo in filter_rule.unwanted_evi_code_ref_combos:
             if evi_ref_combo[0] == evi_code and evi_ref_combo[1] in references:
                 return False
-        return True
-
-args = parser.parse_args()
+    if len(filter_rule.required_attributes) > 0:
+        meets_requirement = False
+        for attr in filter_rule.required_attributes:
+            # a[attr] is dict
+            for k in attr.keys():
+                if a[k] in attr[k]:
+                    meets_requirement = True
+        if not meets_requirement:
+            return False
+    return True
 
 gpad_parser = GpadParser()
 assocs = gpad_parser.parse(args.gpad_file, skipheader=True)
