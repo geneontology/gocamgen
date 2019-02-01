@@ -106,10 +106,12 @@ class GoCamModel():
         self.writer.emit_type(URIRef("http://geneontology.org/lego/hint/layout/x"), OWL.AnnotationProperty)
         self.writer.emit_type(URIRef("http://geneontology.org/lego/hint/layout/y"), OWL.AnnotationProperty)
         self.writer.emit_type(URIRef("http://purl.org/pav/providedBy"), OWL.AnnotationProperty)
+        self.writer.emit_type(URIRef("http://purl.org/dc/elements/1.1/contributor"), OWL.AnnotationProperty)
+        self.writer.emit_type(URIRef("http://purl.org/dc/elements/1.1/date"), OWL.AnnotationProperty)
+        self.writer.emit_type(URIRef("http://purl.org/dc/elements/1.1/source"), OWL.AnnotationProperty)
 
     def declare_class(self, class_id):
         if class_id not in self.classes:
-            # self.writer.emit_type(URIRef("http://identifiers.org/" + class_id), OWL.Class)
             self.writer.emit_type(URIRef(expand_uri_wrapper(class_id)), OWL.Class)
             self.classes.append(class_id)
 
@@ -136,8 +138,8 @@ class GoCamModel():
 
         return stmt_id
 
-    def add_evidence(self, axiom, evidence_code, references):
-        ev = GoCamEvidence(evidence_code, references)
+    def add_evidence(self, axiom, evidence_code, references, contributors=[], date=""):
+        ev = GoCamEvidence(evidence_code, references, contributors=contributors, date=date)
         # Try finding existing evidence object containing same type and references
         # ev_id = self.writer.find_or_create_evidence_id(ev)
         ev_id = self.writer.create_evidence(ev)
@@ -277,19 +279,26 @@ class AssocGoCamModel(GoCamModel):
                 else:
                     aspect_triples.append(self.writer.emit(gp_uri, URIRef(expand_uri_wrapper(self.relations_dict[q])), term_uri))
 
+            annot_date = "{0:%Y-%m-%d}".format(datetime.datetime.strptime(a["date"], "%Y%m%d"))
+            # contributors = handle_annot_properties() # Need annot_properties to be parsed w/ GpadParser first
+            contributors = [""]
             # Add evidence
             for atr in aspect_triples:
                 axiom_id = self.add_axiom(atr)
                 self.add_evidence(axiom_id, a["evidence"]["type"],
-                               a["evidence"]["has_supporting_reference"])
+                               a["evidence"]["has_supporting_reference"],
+                                  contributors=contributors,
+                                  date=annot_date)
 
             # Translate extension - maybe add function argument for custom translations?
 
 
 class GoCamEvidence():
-    def __init__(self, code, references):
+    def __init__(self, code, references, contributors=[], date=""):
         self.evidence_code = code
         self.references = references
+        self.date = date
+        self.contributors = contributors
         self.id = None
 
 class CamTurtleRdfWriter(TurtleRdfWriter):
@@ -340,6 +349,9 @@ class AnnotonCamRdfTransform(CamRdfTransform):
         ev_cls = self.uri(evidence.evidence_code)
         self.emit_type(ev_id, OWL.NamedIndividual)
         self.emit_type(ev_id, ev_cls)
+        self.emit(ev_id, DC.date, Literal(evidence.date))
+        for c in evidence.contributors:
+            self.emit(ev_id, DC.contributor, Literal(c))
         for ref in evidence.references:
             o = Literal(ref) # Needs to go into Noctua like 'PMID:####' rather than full URL
             self.emit(ev_id, HAS_SUPPORTING_REFERENCE, o)
