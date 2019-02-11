@@ -1,0 +1,10 @@
+*.ttl
+dist/
+env/
+*.DS_Store
+*.py~
+*.pyc
+catalog-v001.xml
+wb.gpad
+WB_WBGene00004055.gpad
+*.txt~
