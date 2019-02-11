@@ -13,6 +13,7 @@ import logging
 import argparse
 import datetime
 import os.path as path
+from gpad_extensions_mapper import ExtensionsMapper
 
 # logging.basicConfig(level=logging.INFO)
 
@@ -23,6 +24,7 @@ LEGO = Namespace("http://geneontology.org/lego/")
 LAYOUT = Namespace("http://geneontology.org/lego/hint/layout/")
 PAV = Namespace('http://purl.org/pav/')
 DC = Namespace("http://purl.org/dc/elements/1.1/")
+RDFS = Namespace("http://www.w3.org/2000/01/rdf-schema#")
 
 # Stealing a lot of code for this from ontobio.rdfgen:
 # https://github.com/biolink/ontobio
@@ -138,12 +140,19 @@ class GoCamModel():
 
         return stmt_id
 
-    def add_evidence(self, axiom, evidence_code, references, contributors=[], date=""):
-        ev = GoCamEvidence(evidence_code, references, contributors=contributors, date=date)
+    def add_evidence(self, axiom, evidence_code, references, contributors=[], date="", comment=""):
+        ev = GoCamEvidence(evidence_code, references, contributors=contributors, date=date, comment=comment)
         # Try finding existing evidence object containing same type and references
         # ev_id = self.writer.find_or_create_evidence_id(ev)
         ev_id = self.writer.create_evidence(ev)
         self.writer.emit(axiom, URIRef("http://geneontology.org/lego/evidence"), ev_id)
+        ### Emit ev fields to axiom here TODO: Couple evidence and axiom emitting together
+        self.writer.emit(axiom, DC.date, Literal(ev.date))
+        # self.writer.emit(axiom, RDFS.comment, Literal(ev.comment))
+        # self.writer.emit(axiom, RDFS.comment, Literal(""))
+        for c in ev.contributors:
+            self.writer.emit(axiom, DC.contributor, Literal(c))
+
 
     def add_connection(self, gene_connection, source_annoton):
         # Switching from reusing existing activity node from annoton to creating new one for each connection - Maybe SPARQL first to check if annoton activity already used for connection?
@@ -244,10 +253,11 @@ class GoCamModel():
 
 
 class AssocGoCamModel(GoCamModel):
-    def __init__(self, modeltitle, assocs, ontology, connection_relations=None):
+    def __init__(self, modeltitle, assocs, connection_relations=None):
         GoCamModel.__init__(self, modeltitle, connection_relations)
         self.associations = assocs
-        self.ontology = ontology
+        # self.ontology = ontology
+        self.extensions_mapper = None
 
     def translate(self):
         for a in self.associations:
@@ -280,25 +290,54 @@ class AssocGoCamModel(GoCamModel):
                     aspect_triples.append(self.writer.emit(gp_uri, URIRef(expand_uri_wrapper(self.relations_dict[q])), term_uri))
 
             annot_date = "{0:%Y-%m-%d}".format(datetime.datetime.strptime(a["date"], "%Y%m%d"))
+            source_line = a["source_line"].rstrip().replace("\t", " ")
+            # print(source_line)
             # contributors = handle_annot_properties() # Need annot_properties to be parsed w/ GpadParser first
-            contributors = [""]
+            contributors = []
+            if "annotation_properties" in a and "contributor" in a["annotation_properties"]:
+                contributors = a["annotation_properties"]["contributor"]
+            if len(contributors) == 0:
+                # contributors = [""]
+                contributors = ["http://orcid.org/0000-0002-6659-0416"]
             # Add evidence
             for atr in aspect_triples:
                 axiom_id = self.add_axiom(atr)
                 self.add_evidence(axiom_id, a["evidence"]["type"],
                                a["evidence"]["has_supporting_reference"],
                                   contributors=contributors,
-                                  date=annot_date)
+                                  date=annot_date,
+                                  comment=source_line)
 
             # Translate extension - maybe add function argument for custom translations?
+            if "extensions" in a["object"]:
+                # ext_str = ",".join(a["object"]["extensions"])
+                aspect = self.extensions_mapper.go_aspector.go_aspect(term)
+
+                # For now, pretty much reconstruct the serialized extensions column to pass
+                ext_bits = []
+                for uo in a["object"]["extensions"]['union_of']:
+                    # print(uo)
+                    int_bits = []
+                    for rel in uo["intersection_of"]:
+                        int_bits.append("{}({})".format(rel["property"], rel["filler"]))
+                    ext_bits.append(",".join(int_bits))
+                ext_str = "|".join(ext_bits)
+                # should rules be checked on entire column or "|"-separated bits?
+                is_cool = self.extensions_mapper.annot_following_rules(ext_str, aspect)
+                if is_cool:
+                    print("GOOD: {}".format(ext_str))
+                else:
+                    print("BAD: {}".format(ext_str))
+        self.extensions_mapper.go_aspector.write_cache()
 
 
 class GoCamEvidence():
-    def __init__(self, code, references, contributors=[], date=""):
+    def __init__(self, code, references, contributors=[], date="", comment=""):
         self.evidence_code = code
         self.references = references
         self.date = date
         self.contributors = contributors
+        self.comment = comment
         self.id = None
 
 class CamTurtleRdfWriter(TurtleRdfWriter):
@@ -308,6 +347,7 @@ class CamTurtleRdfWriter(TurtleRdfWriter):
         self.graph.bind("owl", OWL)
         self.graph.bind("obo", "http://purl.obolibrary.org/obo/")
         self.graph.bind("dc", DC)
+        self.graph.bind("rdfs", RDFS)
 
         self.graph.add((self.base, RDF.type, OWL.Ontology))
 
@@ -350,6 +390,8 @@ class AnnotonCamRdfTransform(CamRdfTransform):
         self.emit_type(ev_id, OWL.NamedIndividual)
         self.emit_type(ev_id, ev_cls)
         self.emit(ev_id, DC.date, Literal(evidence.date))
+        # self.emit(ev_id, RDFS.comment, Literal(evidence.comment))
+        # self.emit(ev_id, RDFS.comment, Literal(""))
         for c in evidence.contributors:
             self.emit(ev_id, DC.contributor, Literal(c))
         for ref in evidence.references:
