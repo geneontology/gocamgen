@@ -5,6 +5,7 @@ from ontobio.ontol_factory import OntologyFactory
 from ontobio.ecomap import EcoMap
 import argparse
 from os import path
+from abc import ABC, abstractmethod
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-g', '--gpad_file', help="Filepath of GPAD source with annotations to model", required=True)
@@ -15,29 +16,40 @@ parser.add_argument('-m', '--mod', help="MOD rules to follow for filtering and t
 parser.add_argument('-d', '--output_directory', help="Directory to output model ttl files to")
 
 
-class FilterRule():
+class FilterRule(ABC):
     # Default filter - Remove IEA, IBA, as well as IKRs originating from PAINT.
     def __init__(self, unwanted_evidence_codes=['IEA', 'IBA'],
                  unwanted_evi_code_ref_combos=[('IKR', 'PMID:21873635')],
-                 required_attributes=[]):
+                 required_attributes=None):
         self.unwanted_evidence_codes = unwanted_evidence_codes
         self.unwanted_evi_code_ref_combos = unwanted_evi_code_ref_combos
-        self.required_attributes = required_attributes
+        if required_attributes is None:
+            self.required_attributes = [{"provided_by": [self.mod_id()]}]
+        else:
+            self.required_attributes = required_attributes
         self.unwanted_properties = []
+
+    @abstractmethod
+    def mod_id(self):
+        pass
 
 
 class WBFilterRule(FilterRule):
     # So far same as default FilterRule.
-    def __init__(self):
-        FilterRule.__init__(self)
+
+    def mod_id(self):
+        return "WB"
 
 
 class MGIFilterRule(FilterRule):
     # Only provided_by=MGI lines are valid, also filtering out ISOs along with default FilterRule filters.
     def __init__(self):
-        FilterRule.__init__(self, required_attributes=[{"provided_by": ["MGI"]}])
+        FilterRule.__init__(self)
         self.unwanted_evidence_codes.append('ISO')
         self.unwanted_properties = ["noctua-model-id"]
+
+    def mod_id(self):
+        return "MGI"
 
 mod_filter_map = {
     'WB': WBFilterRule,
@@ -66,6 +78,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.mod in mod_filter_map:
+        # TODO: make a factory function or something to assign based on class mod_id()
         filter_rule = mod_filter_map[args.mod]()
     else:
         filter_rule = FilterRule()
