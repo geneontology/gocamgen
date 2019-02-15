@@ -140,6 +140,17 @@ class GoCamModel():
 
         return stmt_id
 
+    def find_or_create_axiom(self, subject_id : str, relation_uri : URIRef, object_id : str):
+        found_triples = self.triples_by_ids(subject_id, relation_uri, object_id)
+        if len(found_triples) > 0:
+            axiom_id = self.find_bnode(found_triples[0])
+        else:
+            subject_uri = self.declare_individual(subject_id)
+            object_uri = self.declare_individual(object_id)
+            # TODO Can emit() be changed to emit_axiom()?
+            axiom_id = self.add_axiom(self.writer.emit(subject_uri, relation_uri, object_uri))
+        return axiom_id
+
     def add_evidence(self, axiom, evidence_code, references, contributors=[], date="", comment=""):
         ev = GoCamEvidence(evidence_code, references, contributors=contributors, date=date, comment=comment)
         # Try finding existing evidence object containing same type and references
@@ -269,20 +280,14 @@ class AssocGoCamModel(GoCamModel):
             # since relation is explicitly stated in GPAD
             # Standardize aspect using GPAD relations?
 
-            matched_triples = []
-            aspect_triples = []
+            axiom_ids = []
             for q in a["qualifiers"]:
                 if q == "enables":
-                    found_triples = self.triples_by_ids(term, ENABLED_BY, annoton.enabled_by)
-                    print("# of reused triples: {}".format(len(found_triples)))
-                    if len(found_triples) > 0:
-                        matched_triples.append(found_triples[0])
-                    else:
-                        gp_uri = self.declare_individual(annoton.enabled_by)
-                        term_uri = self.declare_individual(term)
-                        aspect_triples.append(self.writer.emit(term_uri, ENABLED_BY, gp_uri))
+                    axiom_id = self.find_or_create_axiom(term, ENABLED_BY, annoton.enabled_by)
+                    axiom_ids.append(axiom_id)
                 elif q == "involved_in":
                     make_new = True
+                    # Try to find chain of two connected triples # TODO: Write function to find chain of any length
                     found_triples = self.triples_by_ids(upt.molecular_function, ENABLED_BY, annoton.enabled_by)
                     if len(found_triples) > 0:
                         for mf_triple in found_triples:
@@ -291,32 +296,27 @@ class AssocGoCamModel(GoCamModel):
                             if len(found_triples) > 0:
                                 # Found both triples. Add em and get out of here
                                 bp_triple = found_triples[0]
-                                matched_triples.append(mf_triple)
-                                matched_triples.append(bp_triple)
+                                axiom_ids.append(self.find_bnode(mf_triple))
+                                axiom_ids.append(self.find_bnode(bp_triple))
                                 make_new = False
                                 break
                     if make_new:
                         mf_root_uri = self.declare_individual(upt.molecular_function)
                         gp_uri = self.declare_individual(annoton.enabled_by)
                         term_uri = self.declare_individual(term)
-                        aspect_triples.append(self.writer.emit(mf_root_uri, ENABLED_BY, gp_uri))
-                        aspect_triples.append(self.writer.emit(mf_root_uri, PART_OF, term_uri))
+                        axiom_ids.append(self.add_axiom(self.writer.emit(mf_root_uri, ENABLED_BY, gp_uri)))
+                        axiom_ids.append(self.add_axiom(self.writer.emit(mf_root_uri, PART_OF, term_uri)))
                 elif q == "NOT":
                     # Try it in UI and look at OWL
                     do_stuff = 1
                 else:
                     relation_uri = URIRef(expand_uri_wrapper(self.relations_dict[q]))
-                    found_triples = self.triples_by_ids(annoton.enabled_by, relation_uri, term)
-                    if len(found_triples) > 0:
-                        matched_triples.append(found_triples[0])
-                    else:
-                        gp_uri = self.declare_individual(annoton.enabled_by)
-                        term_uri = self.declare_individual(term)
-                        aspect_triples.append(self.writer.emit(gp_uri, relation_uri, term_uri))
+                    axiom_id = self.find_or_create_axiom(annoton.enabled_by, relation_uri, term)
+                    axiom_ids.append(axiom_id)
 
+            # Add evidence tied to axiom_ids
             annot_date = "{0:%Y-%m-%d}".format(datetime.datetime.strptime(a["date"], "%Y%m%d"))
             source_line = a["source_line"].rstrip().replace("\t", " ")
-            # print(source_line)
             # contributors = handle_annot_properties() # Need annot_properties to be parsed w/ GpadParser first
             contributors = []
             if "annotation_properties" in a and "contributor" in a["annotation_properties"]:
@@ -324,17 +324,8 @@ class AssocGoCamModel(GoCamModel):
             if len(contributors) == 0:
                 # contributors = [""]
                 contributors = ["http://orcid.org/0000-0002-6659-0416"]
-            # Add evidence
-            for atr in aspect_triples:
-                axiom_id = self.add_axiom(atr)
-                self.add_evidence(axiom_id, a["evidence"]["type"],
-                               a["evidence"]["has_supporting_reference"],
-                                  contributors=contributors,
-                                  date=annot_date,
-                                  comment=source_line)
-            for mt in matched_triples:
-                mt_axiom_id = self.find_bnode(mt)
-                self.add_evidence(mt_axiom_id, a["evidence"]["type"],
+            for a_id in axiom_ids:
+                self.add_evidence(a_id, a["evidence"]["type"],
                                a["evidence"]["has_supporting_reference"],
                                   contributors=contributors,
                                   date=annot_date,
@@ -348,7 +339,6 @@ class AssocGoCamModel(GoCamModel):
                 # For now, pretty much reconstruct the serialized extensions column to pass
                 ext_bits = []
                 for uo in a["object"]["extensions"]['union_of']:
-                    # print(uo)
                     int_bits = []
                     for rel in uo["intersection_of"]:
                         int_bits.append("{}({})".format(rel["property"], rel["filler"]))
