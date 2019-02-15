@@ -15,6 +15,9 @@ parser.add_argument("-f", "--filename")
 parser.add_argument("-d", "--dir")
 parser.add_argument("-o", "--out_file")
 parser.add_argument("-l", "--leftovers_out_file")
+parser.add_argument("-p", "--pattern")
+parser.add_argument("-q", "--pattern_outfile")
+parser.add_argument("-r", "--pattern_sourcefile")
 
 ontology_prefixes = []
 # with open("go_context.jsonld") as gcf:
@@ -392,8 +395,49 @@ if __name__ == "__main__":
                     all_assigners.append(a[9])
                     cols.append(a[9])
 
-    pattern_gpad = open("pattern.gpad", "w+")
-    pattern_gpad_writer = csv.writer(pattern_gpad, delimiter="\t")
+    def parse_pattern_sourcefile(sourcefile):
+        parsed_patterns = []
+        with open(sourcefile) as sf:
+            for pl in sf.readlines():
+                pl = pl.rstrip()
+                parsed_patterns.append(pl)
+        return parsed_patterns
+
+    class GpadWriter:
+        def __init__(self, gpad_file):
+            self.gpad_file = gpad_file
+            self.writer = csv.writer(pattern_gpad, delimiter="\t")
+
+        def writerow(self, row):
+            self.writer.writerow(row)
+
+    class WriterCollection:
+        def __init__(self):
+            self.writers = {}
+
+        def set_writer(self, writer, writer_name):
+            self.writers[writer_name] = writer
+
+
+    patterns = []
+    writers = WriterCollection()
+    if args.pattern or args.pattern_sourcefile:
+        if args.pattern_sourcefile:
+            patterns = parse_pattern_sourcefile(args.pattern_sourcefile)
+            # writers = {}
+            for patt in patterns:
+                pattern_outfile = "{}.gpad".format(patt)
+                pattern_gpad = open(pattern_outfile, "w+")
+                pattern_gpad_writer = GpadWriter(pattern_gpad)
+                writers.set_writer(pattern_gpad_writer, patt)
+        else:
+            patterns.append(args.pattern)
+            pattern_outfile = "{}.gpad".format(args.pattern)
+            if args.pattern_outfile:
+                pattern_outfile = args.pattern_outfile
+            pattern_gpad = open(pattern_outfile, "w+")
+            pattern_gpad_writer = GpadWriter(pattern_gpad)
+            WriterCollection.set_writer(pattern_gpad_writer, args.pattern)
     out_file = "all.tsv"
     if args.out_file:
         out_file = args.out_file
@@ -406,15 +450,17 @@ if __name__ == "__main__":
             example_v = None
             for k, v in ext_dict[aspect].items():
                 row_to_write = [aspect, len(v), k]
-                if k == "part_of(CL),part_of(EMAPA),part_of(EMAPA)":
-                    for a in v:
-                        print(a[0:len(a)-1])
-                        pattern_gpad_writer.writerow(a[0:len(a)-1])
+                if len(patterns) > 0:
+                    for patt in patterns:
+                        if k == patt:
+                            for a in v:
+                                writers.writers[patt].writerow(a[0:len(a)-1])
                 for assigner in all_assigners:
                     a_count = assigner_count(v, assigner)
                     row_to_write.append(a_count)
                 writer.writerow(row_to_write)
-    pattern_gpad.close()
+    for writer_name in writers.writers:
+        writers.writers[writer_name].gpad_file.close()
 
     wanted_gafs = []
     leftovers_out_file = "leftovers.gpad"
