@@ -353,6 +353,22 @@ class AssocGoCamModel(GoCamModel):
         self.extensions_mapper.go_aspector.write_cache()
 
 
+class ReferencePreference():
+    def __init__(self):
+        # List order in python should be persistent
+        self.order_of_prefix_preference = [
+            "PMID",
+            "GO_REF",
+            "doi"
+        ]
+
+    def pick(self, references):
+        for pfx in self.order_of_prefix_preference:
+            for ref in references:
+                if ref.startswith(pfx):
+                    return ref
+
+
 class GoCamEvidence():
     def __init__(self, code, references, contributors=[], date="", comment=""):
         self.evidence_code = code
@@ -361,6 +377,7 @@ class GoCamEvidence():
         self.contributors = contributors
         self.comment = comment
         self.id = None
+
 
 class CamTurtleRdfWriter(TurtleRdfWriter):
     def __init__(self, modeltitle):
@@ -381,6 +398,7 @@ class CamTurtleRdfWriter(TurtleRdfWriter):
         self.graph.add((self.base, URIRef("http://geneontology.org/lego/modelstate"), Literal("development")))
         self.graph.add((self.base, OWL.versionIRI, self.base))
         self.graph.add((self.base, OWL.imports, URIRef("http://purl.obolibrary.org/obo/go/extensions/go-lego.owl")))
+
 
 class AnnotonCamRdfTransform(CamRdfTransform):
     def __init__(self, writer=None):
@@ -416,9 +434,9 @@ class AnnotonCamRdfTransform(CamRdfTransform):
         # self.emit(ev_id, RDFS.comment, Literal(""))
         for c in evidence.contributors:
             self.emit(ev_id, DC.contributor, Literal(c))
-        for ref in evidence.references:
-            o = Literal(ref) # Needs to go into Noctua like 'PMID:####' rather than full URL
-            self.emit(ev_id, HAS_SUPPORTING_REFERENCE, o)
+        ref_to_emit = ReferencePreference().pick(evidence.references)
+        o = Literal(ref_to_emit)  # Needs to go into Noctua like 'PMID:####' rather than full URL
+        self.emit(ev_id, HAS_SUPPORTING_REFERENCE, o)
         self.evidences.append(evidence)
         return evidence.id
 
