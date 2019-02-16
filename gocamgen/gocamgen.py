@@ -159,7 +159,7 @@ class GoCamModel():
         self.writer.emit(axiom, URIRef("http://geneontology.org/lego/evidence"), ev_id)
         ### Emit ev fields to axiom here TODO: Couple evidence and axiom emitting together
         self.writer.emit(axiom, DC.date, Literal(ev.date))
-        # self.writer.emit(axiom, RDFS.comment, Literal(ev.comment))
+        self.writer.emit(axiom, RDFS.comment, Literal(ev.comment))
         # self.writer.emit(axiom, RDFS.comment, Literal(""))
         for c in ev.contributors:
             self.writer.emit(axiom, DC.contributor, Literal(c))
@@ -430,8 +430,6 @@ class AnnotonCamRdfTransform(CamRdfTransform):
         self.emit_type(ev_id, OWL.NamedIndividual)
         self.emit_type(ev_id, ev_cls)
         self.emit(ev_id, DC.date, Literal(evidence.date))
-        # self.emit(ev_id, RDFS.comment, Literal(evidence.comment))
-        # self.emit(ev_id, RDFS.comment, Literal(""))
         for c in evidence.contributors:
             self.emit(ev_id, DC.contributor, Literal(c))
         ref_to_emit = ReferencePreference().pick(evidence.references)
