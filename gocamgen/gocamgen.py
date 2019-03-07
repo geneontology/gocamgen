@@ -13,9 +13,13 @@ import logging
 import argparse
 import datetime
 import os.path as path
+import logging
 from gpad_extensions_mapper import ExtensionsMapper
+from connections import GeneConnection, GeneConnectionSet
 
 # logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+logger.setLevel("INFO")
 
 ro = OboRO()
 evt = Evidence()
@@ -140,15 +144,20 @@ class GoCamModel():
 
         return stmt_id
 
-    def find_or_create_axiom(self, subject_id : str, relation_uri : URIRef, object_id : str):
+    def find_or_create_axiom(self, subject_id : str, relation_uri : URIRef, object_id : str, annoton=None):
         found_triples = self.triples_by_ids(subject_id, relation_uri, object_id)
         if len(found_triples) > 0:
+            subject_uri = found_triples[0][0]
+            object_uri = found_triples[0][2]
             axiom_id = self.find_bnode(found_triples[0])
         else:
             subject_uri = self.declare_individual(subject_id)
             object_uri = self.declare_individual(object_id)
             # TODO Can emit() be changed to emit_axiom()?
             axiom_id = self.add_axiom(self.writer.emit(subject_uri, relation_uri, object_uri))
+        if annoton and relation_uri == ENABLED_BY:
+            annoton.individuals[subject_id] = subject_uri
+            annoton.individuals[object_id] = object_uri
         return axiom_id
 
     def add_evidence(self, axiom, evidence_code, references, contributors=[], date="", comment=""):
@@ -271,6 +280,8 @@ class AssocGoCamModel(GoCamModel):
         self.extensions_mapper = None
 
     def translate(self):
+        input_relations = ['has input', 'has_direct_input']
+
         for a in self.associations:
 
             annoton = Annoton(a["subject"]["id"], [a])
@@ -283,7 +294,10 @@ class AssocGoCamModel(GoCamModel):
             axiom_ids = []
             for q in a["qualifiers"]:
                 if q == "enables":
-                    axiom_id = self.find_or_create_axiom(term, ENABLED_BY, annoton.enabled_by)
+                    axiom_id = self.find_or_create_axiom(term, ENABLED_BY, annoton.enabled_by, annoton=annoton)
+                    # Get enabled_by URI (owl:annotatedTarget) using axiom_id (a hack because I'm still using Annoton object with gene_connections)
+                    enabled_by_uri = list(self.writer.writer.graph.triples((axiom_id, OWL.annotatedTarget, None)))[0][2]
+                    annoton.individuals[annoton.enabled_by] = enabled_by_uri
                     axiom_ids.append(axiom_id)
                 elif q == "involved_in":
                     make_new = True
@@ -305,6 +319,9 @@ class AssocGoCamModel(GoCamModel):
                         gp_uri = self.declare_individual(annoton.enabled_by)
                         term_uri = self.declare_individual(term)
                         axiom_ids.append(self.add_axiom(self.writer.emit(mf_root_uri, ENABLED_BY, gp_uri)))
+                        # Get enabled_by URI (owl:annotatedTarget) using axiom_id
+                        enabled_by_uri = list(self.writer.writer.graph.triples((axiom_id, OWL.annotatedTarget, None)))[0][2]
+                        annoton.individuals[annoton.enabled_by] = enabled_by_uri
                         axiom_ids.append(self.add_axiom(self.writer.emit(mf_root_uri, PART_OF, term_uri)))
                 elif q == "NOT":
                     # Try it in UI and look at OWL
@@ -312,6 +329,9 @@ class AssocGoCamModel(GoCamModel):
                 else:
                     relation_uri = URIRef(expand_uri_wrapper(self.relations_dict[q]))
                     axiom_id = self.find_or_create_axiom(annoton.enabled_by, relation_uri, term)
+                    # Get enabled_by URI (owl:annotatedSource) using axiom_id
+                    enabled_by_uri = list(self.writer.writer.graph.triples((axiom_id, OWL.annotatedSource, None)))[0][2]
+                    annoton.individuals[annoton.enabled_by] = enabled_by_uri
                     axiom_ids.append(axiom_id)
 
             # Add evidence tied to axiom_ids
@@ -348,6 +368,18 @@ class AssocGoCamModel(GoCamModel):
                 is_cool = self.extensions_mapper.annot_following_rules(ext_str, aspect)
                 if is_cool:
                     print("GOOD: {}".format(ext_str))
+                    # Start with has_input/has_direct_input extensions
+                    # Ex. python3 gen_models_by_gene.py -g resources/mgi.gpa.test.gpa -m MGI -s MGI:MGI:87859
+                    for uo in a["object"]["extensions"]['union_of']:
+                        for rel in uo["intersection_of"]:
+                            ext_relation = rel["property"]
+                            ext_target = rel["filler"]
+                            if ext_relation in input_relations and annoton.enabled_by != ext_target:
+                                logger.debug("Adding connection {} {} {}".format(annoton.enabled_by, ext_relation, ext_target))
+                                target_gene_id = self.declare_individual(ext_target)
+                                annoton.individuals[ext_target] = target_gene_id
+                                connection = GeneConnection(annoton.enabled_by, ext_target, term, ext_relation, a)
+                                self.add_connection(connection, annoton)
                 else:
                     print("BAD: {}".format(ext_str))
         self.extensions_mapper.go_aspector.write_cache()
