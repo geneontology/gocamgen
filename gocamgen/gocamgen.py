@@ -151,8 +151,9 @@ class GoCamModel():
             object_uri = found_triples[0][2]
             axiom_id = self.find_bnode(found_triples[0])
         else:
-            subject_uri = self.declare_individual(subject_id)
-            object_uri = self.declare_individual(object_id)
+            # subject_uri = self.declare_individual(subject_id)
+            subject_uri = subject_id if subject_id.__class__.__name__ == "URIRef" else self.declare_individual(subject_id)
+            object_uri = object_id if object_id.__class__.__name__ == "URIRef" else self.declare_individual(object_id)
             # TODO Can emit() be changed to emit_axiom()?
             axiom_id = self.add_axiom(self.writer.emit(subject_uri, relation_uri, object_uri))
         if annoton and relation_uri == ENABLED_BY:
@@ -280,7 +281,10 @@ class AssocGoCamModel(GoCamModel):
         self.extensions_mapper = None
 
     def translate(self):
-        input_relations = ['has input', 'has_direct_input']
+        input_relations = {
+            "has_direct_input": "RO:0002400",
+            "has input": "RO:0002233"
+        }
 
         for a in self.associations:
 
@@ -291,12 +295,14 @@ class AssocGoCamModel(GoCamModel):
             # since relation is explicitly stated in GPAD
             # Standardize aspect using GPAD relations?
 
+            anchor_uri = None
             axiom_ids = []
             for q in a["qualifiers"]:
                 if q == "enables":
                     axiom_id = self.find_or_create_axiom(term, ENABLED_BY, annoton.enabled_by, annoton=annoton)
                     # Get enabled_by URI (owl:annotatedTarget) using axiom_id (a hack because I'm still using Annoton object with gene_connections)
                     enabled_by_uri = list(self.writer.writer.graph.triples((axiom_id, OWL.annotatedTarget, None)))[0][2]
+                    anchor_uri = list(self.writer.writer.graph.triples((axiom_id, OWL.annotatedSource, None)))[0][2]
                     annoton.individuals[annoton.enabled_by] = enabled_by_uri
                     axiom_ids.append(axiom_id)
                 elif q == "involved_in":
@@ -312,16 +318,19 @@ class AssocGoCamModel(GoCamModel):
                                 bp_triple = found_triples[0]
                                 axiom_ids.append(self.find_bnode(mf_triple))
                                 axiom_ids.append(self.find_bnode(bp_triple))
+                                anchor_uri = found_mf_uri
                                 make_new = False
                                 break
                     if make_new:
                         mf_root_uri = self.declare_individual(upt.molecular_function)
                         gp_uri = self.declare_individual(annoton.enabled_by)
                         term_uri = self.declare_individual(term)
-                        axiom_ids.append(self.add_axiom(self.writer.emit(mf_root_uri, ENABLED_BY, gp_uri)))
+                        axiom_id = self.add_axiom(self.writer.emit(mf_root_uri, ENABLED_BY, gp_uri))
+                        axiom_ids.append(axiom_id)
                         # Get enabled_by URI (owl:annotatedTarget) using axiom_id
                         enabled_by_uri = list(self.writer.writer.graph.triples((axiom_id, OWL.annotatedTarget, None)))[0][2]
                         annoton.individuals[annoton.enabled_by] = enabled_by_uri
+                        anchor_uri = mf_root_uri
                         axiom_ids.append(self.add_axiom(self.writer.emit(mf_root_uri, PART_OF, term_uri)))
                 elif q == "NOT":
                     # Try it in UI and look at OWL
@@ -332,6 +341,7 @@ class AssocGoCamModel(GoCamModel):
                     # Get enabled_by URI (owl:annotatedSource) using axiom_id
                     enabled_by_uri = list(self.writer.writer.graph.triples((axiom_id, OWL.annotatedSource, None)))[0][2]
                     annoton.individuals[annoton.enabled_by] = enabled_by_uri
+                    anchor_uri = enabled_by_uri
                     axiom_ids.append(axiom_id)
 
             # Add evidence tied to axiom_ids
@@ -378,8 +388,17 @@ class AssocGoCamModel(GoCamModel):
                                 logger.debug("Adding connection {} {} {}".format(annoton.enabled_by, ext_relation, ext_target))
                                 target_gene_id = self.declare_individual(ext_target)
                                 annoton.individuals[ext_target] = target_gene_id
-                                connection = GeneConnection(annoton.enabled_by, ext_target, term, ext_relation, a)
-                                self.add_connection(connection, annoton)
+                                # connection = GeneConnection(annoton.enabled_by, ext_target, term, ext_relation, a)
+                                # self.add_connection_new(connection, annoton)
+                                axiom_id = self.find_or_create_axiom(anchor_uri, URIRef(expand_uri_wrapper(input_relations[ext_relation])), target_gene_id)
+                                self.add_evidence(axiom_id, a["evidence"]["type"],
+                                                  a["evidence"]["has_supporting_reference"],
+                                                  contributors=contributors,
+                                                  date=annot_date,
+                                                  comment=source_line)
+                                # Nice-to-have functions:
+                                # add_axiom(triple, evidence=[])
+                                # add_evidence_to_axiom(axiom_id, evidence)
                 else:
                     print("BAD: {}".format(ext_str))
         self.extensions_mapper.go_aspector.write_cache()
