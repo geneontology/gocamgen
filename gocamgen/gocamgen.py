@@ -144,6 +144,12 @@ class GoCamModel():
 
         return stmt_id
 
+    def create_axiom(self, subject_id, relation_uri, object_id):
+        subject_uri = subject_id if subject_id.__class__.__name__ == "URIRef" else self.declare_individual(subject_id)
+        object_uri = object_id if object_id.__class__.__name__ == "URIRef" else self.declare_individual(object_id)
+        axiom_id = self.add_axiom(self.writer.emit(subject_uri, relation_uri, object_uri))
+        return axiom_id
+
     def find_or_create_axiom(self, subject_id : str, relation_uri : URIRef, object_id : str, annoton=None):
         found_triples = self.triples_by_ids(subject_id, relation_uri, object_id)
         if len(found_triples) > 0:
@@ -282,7 +288,9 @@ class AssocGoCamModel(GoCamModel):
 
     def translate(self):
         input_relations = {
-            "has_direct_input": "RO:0002400",
+            #TODO Create rule for deciding (MOD-specific?) whether to convert has_direct_input to has input
+            # "has_direct_input": "RO:0002400",
+            "has_direct_input": "RO:0002233",
             "has input": "RO:0002233"
         }
 
@@ -295,21 +303,29 @@ class AssocGoCamModel(GoCamModel):
             # since relation is explicitly stated in GPAD
             # Standardize aspect using GPAD relations?
 
+            make_new = False
+            if "extensions" in a["object"]:
+                # Always make new triple if extensions in line?
+                make_new = True
+
             anchor_uri = None
             axiom_ids = []
             for q in a["qualifiers"]:
                 if q == "enables":
-                    axiom_id = self.find_or_create_axiom(term, ENABLED_BY, annoton.enabled_by, annoton=annoton)
+                    if make_new:
+                        axiom_id = self.find_or_create_axiom(term, ENABLED_BY, annoton.enabled_by, annoton=annoton)
+                    else:
+                        axiom_id = self.create_axiom(term, ENABLED_BY, annoton.enabled_by)
                     # Get enabled_by URI (owl:annotatedTarget) using axiom_id (a hack because I'm still using Annoton object with gene_connections)
                     enabled_by_uri = list(self.writer.writer.graph.triples((axiom_id, OWL.annotatedTarget, None)))[0][2]
                     anchor_uri = list(self.writer.writer.graph.triples((axiom_id, OWL.annotatedSource, None)))[0][2]
                     annoton.individuals[annoton.enabled_by] = enabled_by_uri
                     axiom_ids.append(axiom_id)
                 elif q == "involved_in":
-                    make_new = True
                     # Try to find chain of two connected triples # TODO: Write function to find chain of any length
                     found_triples = self.triples_by_ids(upt.molecular_function, ENABLED_BY, annoton.enabled_by)
-                    if len(found_triples) > 0:
+                    if not make_new and len(found_triples) > 0:
+                        make_new = True  # Reset in case we don't find a matching triple-pair
                         for mf_triple in found_triples:
                             found_mf_uri = mf_triple[0]
                             found_triples = self.triples_by_ids(found_mf_uri, PART_OF, term)
@@ -337,7 +353,10 @@ class AssocGoCamModel(GoCamModel):
                     do_stuff = 1
                 else:
                     relation_uri = URIRef(expand_uri_wrapper(self.relations_dict[q]))
-                    axiom_id = self.find_or_create_axiom(annoton.enabled_by, relation_uri, term)
+                    if make_new:
+                        axiom_id = self.find_or_create_axiom(annoton.enabled_by, relation_uri, term)
+                    else:
+                        axiom_id = self.create_axiom(annoton.enabled_by, relation_uri, term)
                     # Get enabled_by URI (owl:annotatedSource) using axiom_id
                     enabled_by_uri = list(self.writer.writer.graph.triples((axiom_id, OWL.annotatedSource, None)))[0][2]
                     annoton.individuals[annoton.enabled_by] = enabled_by_uri
