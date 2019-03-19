@@ -396,7 +396,7 @@ class AssocGoCamModel(GoCamModel):
                 # should rules be checked on entire column or "|"-separated bits?
                 is_cool = self.extensions_mapper.annot_following_rules(ext_str, aspect)
                 if is_cool:
-                    print("GOOD: {}".format(ext_str))
+                    logger.debug("GOOD: {}".format(ext_str))
                     # Start with has_input/has_direct_input extensions
                     # Ex. python3 gen_models_by_gene.py -g resources/mgi.gpa.test.gpa -m MGI -s MGI:MGI:87859
                     for uo in a["object"]["extensions"]['union_of']:
@@ -419,7 +419,7 @@ class AssocGoCamModel(GoCamModel):
                                 # add_axiom(triple, evidence=[])
                                 # add_evidence_to_axiom(axiom_id, evidence)
                 else:
-                    print("BAD: {}".format(ext_str))
+                    logger.debug("BAD: {}".format(ext_str))
         self.extensions_mapper.go_aspector.write_cache()
 
 
