@@ -296,6 +296,15 @@ class AssocGoCamModel(GoCamModel):
 
         for a in self.associations:
 
+            # Divert annotations to either "no-extensions" or "with-extensions"
+            # if "extensions" in a["object"]:
+            #   act normal
+            # else:
+            #   for uo in a["object"]["extensions"]['union_of']:
+            #       act normal but work with individual extension (uo)
+            #
+            # How to code this "act normal" function?
+
             annoton = Annoton(a["subject"]["id"], [a])
             term = a["object"]["id"]
 
@@ -308,6 +317,11 @@ class AssocGoCamModel(GoCamModel):
                 # Always make new triple if extensions in line?
                 make_new = True
 
+            # This will start the "act normal" function.
+            # What variables do I need for passing to extension handling?
+            #   anchor_uri
+            #   annoton # This is initialized outside "act_normal" function
+            #
             anchor_uri = None
             axiom_ids = []
             for q in a["qualifiers"]:
@@ -386,20 +400,25 @@ class AssocGoCamModel(GoCamModel):
                 aspect = self.extensions_mapper.go_aspector.go_aspect(term)
 
                 # For now, pretty much reconstruct the serialized extensions column to pass
-                ext_bits = []
+                # ext_bits = []
                 for uo in a["object"]["extensions"]['union_of']:
+                    #     int_bits = []
+                    #     for rel in uo["intersection_of"]:
+                    #         int_bits.append("{}({})".format(rel["property"], rel["filler"]))
+                    #     ext_bits.append(",".join(int_bits))
+                    # ext_str = "|".join(ext_bits)
+                    # should rules be checked on only "|"-separated bits
                     int_bits = []
                     for rel in uo["intersection_of"]:
                         int_bits.append("{}({})".format(rel["property"], rel["filler"]))
-                    ext_bits.append(",".join(int_bits))
-                ext_str = "|".join(ext_bits)
-                # should rules be checked on entire column or "|"-separated bits?
-                is_cool = self.extensions_mapper.annot_following_rules(ext_str, aspect)
-                if is_cool:
-                    logger.debug("GOOD: {}".format(ext_str))
-                    # Start with has_input/has_direct_input extensions
-                    # Ex. python3 gen_models_by_gene.py -g resources/mgi.gpa.test.gpa -m MGI -s MGI:MGI:87859
-                    for uo in a["object"]["extensions"]['union_of']:
+                    ext_str = ",".join(int_bits)
+
+                    is_cool = self.extensions_mapper.annot_following_rules(uo['intersection_of'], aspect)
+                    if is_cool:
+                        logger.debug("GOOD: {}".format(ext_str))
+                        # Start with has_input/has_direct_input extensions
+                        # Ex. python3 gen_models_by_gene.py -g resources/mgi.gpa.test.gpa -m MGI -s MGI:MGI:87859
+                        # for uo in a["object"]["extensions"]['union_of']:
                         for rel in uo["intersection_of"]:
                             ext_relation = rel["property"]
                             ext_target = rel["filler"]
@@ -418,8 +437,8 @@ class AssocGoCamModel(GoCamModel):
                                 # Nice-to-have functions:
                                 # add_axiom(triple, evidence=[])
                                 # add_evidence_to_axiom(axiom_id, evidence)
-                else:
-                    logger.debug("BAD: {}".format(ext_str))
+                    else:
+                        logger.debug("BAD: {}".format(ext_str))
         self.extensions_mapper.go_aspector.write_cache()
 
 

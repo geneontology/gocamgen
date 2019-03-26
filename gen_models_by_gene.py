@@ -9,7 +9,7 @@ from os import path
 from abc import ABC, abstractmethod
 
 logger = logging.getLogger(__name__)
-logger.setLevel("INFO")
+logger.setLevel("DEBUG")
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-g', '--gpad_file', help="Filepath of GPAD source with annotations to model", required=True)
@@ -163,6 +163,7 @@ if __name__ == "__main__":
             if specific_gene not in assocs_by_gene:
                 logger.error("ERROR: specific gene {} not found in filtered annotation list".format(specific_gene))
             else:
+                logger.debug("{} filtered annotations to translate for {}".format(len(assocs_by_gene[specific_gene]), specific_gene))
                 model = builder.translate_to_model(specific_gene, assocs_by_gene[specific_gene])
                 out_filename = "{}.ttl".format(specific_gene.replace(":", "_"))
                 if args.output_directory:

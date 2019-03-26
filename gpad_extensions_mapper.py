@@ -1,4 +1,5 @@
 # from ontobio.io.gafparser import GafParser
+from ontobio.io.gpadparser import GpadParser
 from ontobio.ontol_factory import OntologyFactory
 # from prefixcommons import curie_util
 from ontobio.ecomap import EcoMap
@@ -240,10 +241,11 @@ class ExtensionsMapper():
     def __init__(self):
         self.go_aspector = CachedGoAspector("resources/aspect_lookup.json")
 
-    def extensions_list(self, extensions):
+    def extensions_list(self, intersection_extensions):
         ext_list = []
-        for i in extensions:
-            relation, ext_term = get_relation_and_term(i)
+        # Assuming these extensions are already separated by comma
+        for i in intersection_extensions:
+            relation, ext_term = i['property'], i['filler']
             term_prefix = ext_term.split(":")[0]
             # is prefix for ontology or mod?
             if term_prefix in ontology_prefixes:
@@ -270,9 +272,11 @@ class ExtensionsMapper():
     # HANDLE ASSOCIATION OBJECT_EXTENSIONS STRUCTURE
     def annot_following_rules(self, annot, aspect):
         ext_list = []
-        extensions = annot.split(",")
+        #TODO for a in annot.split("|"):
+        # extensions = annot.split(",")
         # annot["object_extensions"]
-        ext_list = self.extensions_list(extensions)
+        # ext_list = self.extensions_list(extensions)
+        ext_list = self.extensions_list(annot)
         # Standardize key - ex:
         #   ["part_of(GO:aspect),part_of(UBERON:)"]
         return following_rules(ext_list, aspect)
@@ -312,6 +316,7 @@ if __name__ == "__main__":
 
     # all_dict = {}
     extensions_mapper = ExtensionsMapper()
+    gpad_parser = GpadParser()
     print("Creating extension dictionary...")
     ext_dict = {}
     ext_dict['F'] = {}
@@ -333,25 +338,37 @@ if __name__ == "__main__":
             print("Total GPAD count:", len(data))
 
             for g in data:
-                # if "object_extensions" in g:  # all should have extensions now
                 go_term = g[3]
-                # aspect = get_go_aspect(go_term)
                 aspect = extensions_mapper.go_aspector.go_aspect(go_term)
-                # aspect = g[8] # g["aspect"]
-                # list to sort alphabetically
-                # ext_list = []
-                extensions = g[10].split(",")
-                ext_list = extensions_mapper.extensions_list(extensions)
+                ontobio_extensions = gpad_parser._parse_full_extension_expression(g[10])
+                # ontobio_pattern = {
+                #     'union_of': [
+                #         {
+                #             'intersection_of': [
+                #                 {'property': 'part_of', 'filler': 'CL:0000678'},
+                #                 {'property': 'part_of', 'filler': 'EMAPA:16525'}
+                #             ]
+                #         },
+                #         {
+                #               'intersection_of': [
+                #                   {'property': 'part_of', 'filler': 'CL:0000678'},
+                #                   {'property': 'part_of', 'filler': 'EMAPA:16525'}
+                #               ]
+                #         }
+                #     ]
+                # }
+                for onto_ext in ontobio_extensions:
+                    ext_list = extensions_mapper.extensions_list(onto_ext['intersection_of'])
+                    if not following_rules(ext_list, aspect):
+                        ext_key = ",".join(ext_list)
+                        # if ext_key == "part_of(CL),part_of(EMAPA),part_of(EMAPA)":
+                        #     print(ext_list)
+                        if ext_key not in ext_dict[aspect]:
+                            ext_dict[aspect][ext_key] = [g]
+                        else:
+                            ext_dict[aspect][ext_key].append(g)
                 # Standardize key - ex:
                 #   ["part_of(GO:aspect),part_of(UBERON:)"]
-                if not following_rules(ext_list, aspect):
-                    ext_key = ",".join(ext_list)
-                    # if ext_key == "part_of(CL),part_of(EMAPA),part_of(EMAPA)":
-                    #     print(ext_list)
-                    if ext_key not in ext_dict[aspect]:
-                        ext_dict[aspect][ext_key] = [g]
-                    else:
-                        ext_dict[aspect][ext_key].append(g)
 
             for aspect in ['F','P','C']:
                 max_count = 0
