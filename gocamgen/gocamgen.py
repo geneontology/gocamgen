@@ -280,11 +280,13 @@ class GoCamModel():
 
 
 class AssocGoCamModel(GoCamModel):
+
     def __init__(self, modeltitle, assocs, connection_relations=None):
         GoCamModel.__init__(self, modeltitle, connection_relations)
         self.associations = assocs
         # self.ontology = ontology
         self.extensions_mapper = None
+        self.default_contributor = "http://orcid.org/0000-0002-6659-0416"
 
     def translate(self):
         input_relations = {
@@ -297,7 +299,7 @@ class AssocGoCamModel(GoCamModel):
         for a in self.associations:
 
             # Divert annotations to either "no-extensions" or "with-extensions"
-            # if "extensions" in a["object"]:
+            # if "extensions" not in a["object"]:
             #   act normal
             # else:
             #   for uo in a["object"]["extensions"]['union_of']:
@@ -317,66 +319,9 @@ class AssocGoCamModel(GoCamModel):
                 # Always make new triple if extensions in line?
                 make_new = True
 
-            # This will start the "act normal" function.
-            # What variables do I need for passing to extension handling?
-            #   anchor_uri
-            #   annoton # This is initialized outside "act_normal" function
-            #
-            anchor_uri = None
-            axiom_ids = []
-            for q in a["qualifiers"]:
-                if q == "enables":
-                    if make_new:
-                        axiom_id = self.find_or_create_axiom(term, ENABLED_BY, annoton.enabled_by, annoton=annoton)
-                    else:
-                        axiom_id = self.create_axiom(term, ENABLED_BY, annoton.enabled_by)
-                    # Get enabled_by URI (owl:annotatedTarget) using axiom_id (a hack because I'm still using Annoton object with gene_connections)
-                    enabled_by_uri = list(self.writer.writer.graph.triples((axiom_id, OWL.annotatedTarget, None)))[0][2]
-                    anchor_uri = list(self.writer.writer.graph.triples((axiom_id, OWL.annotatedSource, None)))[0][2]
-                    annoton.individuals[annoton.enabled_by] = enabled_by_uri
-                    axiom_ids.append(axiom_id)
-                elif q == "involved_in":
-                    # Try to find chain of two connected triples # TODO: Write function to find chain of any length
-                    found_triples = self.triples_by_ids(upt.molecular_function, ENABLED_BY, annoton.enabled_by)
-                    if not make_new and len(found_triples) > 0:
-                        make_new = True  # Reset in case we don't find a matching triple-pair
-                        for mf_triple in found_triples:
-                            found_mf_uri = mf_triple[0]
-                            found_triples = self.triples_by_ids(found_mf_uri, PART_OF, term)
-                            if len(found_triples) > 0:
-                                # Found both triples. Add em and get out of here
-                                bp_triple = found_triples[0]
-                                axiom_ids.append(self.find_bnode(mf_triple))
-                                axiom_ids.append(self.find_bnode(bp_triple))
-                                anchor_uri = found_mf_uri
-                                make_new = False
-                                break
-                    if make_new:
-                        mf_root_uri = self.declare_individual(upt.molecular_function)
-                        gp_uri = self.declare_individual(annoton.enabled_by)
-                        term_uri = self.declare_individual(term)
-                        axiom_id = self.add_axiom(self.writer.emit(mf_root_uri, ENABLED_BY, gp_uri))
-                        axiom_ids.append(axiom_id)
-                        # Get enabled_by URI (owl:annotatedTarget) using axiom_id
-                        enabled_by_uri = list(self.writer.writer.graph.triples((axiom_id, OWL.annotatedTarget, None)))[0][2]
-                        annoton.individuals[annoton.enabled_by] = enabled_by_uri
-                        anchor_uri = mf_root_uri
-                        axiom_ids.append(self.add_axiom(self.writer.emit(mf_root_uri, PART_OF, term_uri)))
-                elif q == "NOT":
-                    # Try it in UI and look at OWL
-                    do_stuff = 1
-                else:
-                    relation_uri = URIRef(expand_uri_wrapper(self.relations_dict[q]))
-                    if make_new:
-                        axiom_id = self.find_or_create_axiom(annoton.enabled_by, relation_uri, term)
-                    else:
-                        axiom_id = self.create_axiom(annoton.enabled_by, relation_uri, term)
-                    # Get enabled_by URI (owl:annotatedSource) using axiom_id
-                    enabled_by_uri = list(self.writer.writer.graph.triples((axiom_id, OWL.annotatedSource, None)))[0][2]
-                    annoton.individuals[annoton.enabled_by] = enabled_by_uri
-                    anchor_uri = enabled_by_uri
-                    axiom_ids.append(axiom_id)
+            # anchor_uri = self.translate_primary_annotation(a, annoton, make_new)
 
+            # TODO stuff annot_date and contributors into annot data structure for reuse
             # Add evidence tied to axiom_ids
             annot_date = "{0:%Y-%m-%d}".format(datetime.datetime.strptime(a["date"], "%Y%m%d"))
             source_line = a["source_line"].rstrip().replace("\t", " ")
@@ -385,17 +330,12 @@ class AssocGoCamModel(GoCamModel):
             if "annotation_properties" in a and "contributor" in a["annotation_properties"]:
                 contributors = a["annotation_properties"]["contributor"]
             if len(contributors) == 0:
-                # contributors = [""]
-                contributors = ["http://orcid.org/0000-0002-6659-0416"]
-            for a_id in axiom_ids:
-                self.add_evidence(a_id, a["evidence"]["type"],
-                               a["evidence"]["has_supporting_reference"],
-                                  contributors=contributors,
-                                  date=annot_date,
-                                  comment=source_line)
+                contributors = [self.default_contributor]
 
             # Translate extension - maybe add function argument for custom translations?
-            if "extensions" in a["object"]:
+            if "extensions" not in a["object"]:
+                anchor_uri = self.translate_primary_annotation(a, annoton, make_new)
+            else:
                 # ext_str = ",".join(a["object"]["extensions"])
                 aspect = self.extensions_mapper.go_aspector.go_aspect(term)
 
@@ -413,6 +353,7 @@ class AssocGoCamModel(GoCamModel):
                         int_bits.append("{}({})".format(rel["property"], rel["filler"]))
                     ext_str = ",".join(int_bits)
 
+                    anchor_uri = self.translate_primary_annotation(a, annoton, make_new)
                     is_cool = self.extensions_mapper.annot_following_rules(uo['intersection_of'], aspect)
                     if is_cool:
                         logger.debug("GOOD: {}".format(ext_str))
@@ -440,6 +381,90 @@ class AssocGoCamModel(GoCamModel):
                     else:
                         logger.debug("BAD: {}".format(ext_str))
         self.extensions_mapper.go_aspector.write_cache()
+
+    def translate_primary_annotation(self, annotation, annoton, make_new):
+        # This will start the "act normal" function.
+        # What variables do I need for passing to extension handling?
+        #   anchor_uri
+        #   annoton # This is initialized outside "act_normal" function
+        #
+        term = annotation["object"]["id"]
+
+        anchor_uri = None
+        axiom_ids = []
+        for q in annotation["qualifiers"]:
+            if q == "enables":
+                if make_new:
+                    axiom_id = self.find_or_create_axiom(term, ENABLED_BY, annoton.enabled_by, annoton=annoton)
+                else:
+                    axiom_id = self.create_axiom(term, ENABLED_BY, annoton.enabled_by)
+                # Get enabled_by URI (owl:annotatedTarget) using axiom_id (a hack because I'm still using Annoton object with gene_connections)
+                enabled_by_uri = list(self.writer.writer.graph.triples((axiom_id, OWL.annotatedTarget, None)))[0][2]
+                anchor_uri = list(self.writer.writer.graph.triples((axiom_id, OWL.annotatedSource, None)))[0][2]
+                annoton.individuals[annoton.enabled_by] = enabled_by_uri
+                axiom_ids.append(axiom_id)
+            elif q == "involved_in":
+                # Try to find chain of two connected triples # TODO: Write function to find chain of any length
+                found_triples = self.triples_by_ids(upt.molecular_function, ENABLED_BY, annoton.enabled_by)
+                if not make_new and len(found_triples) > 0:
+                    make_new = True  # Reset in case we don't find a matching triple-pair
+                    for mf_triple in found_triples:
+                        found_mf_uri = mf_triple[0]
+                        found_triples = self.triples_by_ids(found_mf_uri, PART_OF, term)
+                        if len(found_triples) > 0:
+                            # Found both triples. Add em and get out of here
+                            bp_triple = found_triples[0]
+                            axiom_ids.append(self.find_bnode(mf_triple))
+                            axiom_ids.append(self.find_bnode(bp_triple))
+                            anchor_uri = found_mf_uri
+                            make_new = False
+                            break
+                if make_new:
+                    mf_root_uri = self.declare_individual(upt.molecular_function)
+                    gp_uri = self.declare_individual(annoton.enabled_by)
+                    term_uri = self.declare_individual(term)
+                    axiom_id = self.add_axiom(self.writer.emit(mf_root_uri, ENABLED_BY, gp_uri))
+                    axiom_ids.append(axiom_id)
+                    # Get enabled_by URI (owl:annotatedTarget) using axiom_id
+                    enabled_by_uri = list(self.writer.writer.graph.triples((axiom_id, OWL.annotatedTarget, None)))[0][2]
+                    annoton.individuals[annoton.enabled_by] = enabled_by_uri
+                    anchor_uri = mf_root_uri
+                    axiom_ids.append(self.add_axiom(self.writer.emit(mf_root_uri, PART_OF, term_uri)))
+            elif q == "NOT":
+                # Try it in UI and look at OWL
+                do_stuff = 1
+            else:
+                relation_uri = URIRef(expand_uri_wrapper(self.relations_dict[q]))
+                if make_new:
+                    axiom_id = self.create_axiom(annoton.enabled_by, relation_uri, term)
+                else:
+                    axiom_id = self.find_or_create_axiom(annoton.enabled_by, relation_uri, term)
+                # Get enabled_by URI (owl:annotatedSource) using axiom_id
+                enabled_by_uri = list(self.writer.writer.graph.triples((axiom_id, OWL.annotatedSource, None)))[0][2]
+                annoton.individuals[annoton.enabled_by] = enabled_by_uri
+                term_uri = list(self.writer.writer.graph.triples((axiom_id, OWL.annotatedTarget, None)))[0][2]
+                # anchor_uri = enabled_by_uri
+                anchor_uri = term_uri
+                axiom_ids.append(axiom_id)
+
+        # Add evidence tied to axiom_ids
+        annot_date = "{0:%Y-%m-%d}".format(datetime.datetime.strptime(annotation["date"], "%Y%m%d"))
+        source_line = annotation["source_line"].rstrip().replace("\t", " ")
+        # contributors = handle_annot_properties() # Need annot_properties to be parsed w/ GpadParser first
+        contributors = []
+        if "annotation_properties" in annotation and "contributor" in annotation["annotation_properties"]:
+            contributors = annotation["annotation_properties"]["contributor"]
+        if len(contributors) == 0:
+            # contributors = [""]
+            contributors = [self.default_contributor]
+        for a_id in axiom_ids:
+            self.add_evidence(a_id, annotation["evidence"]["type"],
+                              annotation["evidence"]["has_supporting_reference"],
+                              contributors=contributors,
+                              date=annot_date,
+                              comment=source_line)
+
+        return anchor_uri
 
 
 class ReferencePreference():
