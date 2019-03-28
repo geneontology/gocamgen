@@ -339,28 +339,21 @@ class AssocGoCamModel(GoCamModel):
                 # ext_str = ",".join(a["object"]["extensions"])
                 aspect = self.extensions_mapper.go_aspector.go_aspect(term)
 
-                # For now, pretty much reconstruct the serialized extensions column to pass
-                # ext_bits = []
                 for uo in a["object"]["extensions"]['union_of']:
-                    #     int_bits = []
-                    #     for rel in uo["intersection_of"]:
-                    #         int_bits.append("{}({})".format(rel["property"], rel["filler"]))
-                    #     ext_bits.append(",".join(int_bits))
-                    # ext_str = "|".join(ext_bits)
-                    # should rules be checked on only "|"-separated bits
                     int_bits = []
                     for rel in uo["intersection_of"]:
                         int_bits.append("{}({})".format(rel["property"], rel["filler"]))
                     ext_str = ",".join(int_bits)
 
                     anchor_uri = self.translate_primary_annotation(a, annoton, make_new)
-                    is_cool = self.extensions_mapper.annot_following_rules(uo['intersection_of'], aspect)
+                    intersection_extensions = self.extensions_mapper.dedupe_extensions(uo['intersection_of'])
+                    is_cool = self.extensions_mapper.annot_following_rules(intersection_extensions, aspect)
                     if is_cool:
                         logger.debug("GOOD: {}".format(ext_str))
                         # Start with has_input/has_direct_input extensions
                         # Ex. python3 gen_models_by_gene.py -g resources/mgi.gpa.test.gpa -m MGI -s MGI:MGI:87859
                         # for uo in a["object"]["extensions"]['union_of']:
-                        for rel in uo["intersection_of"]:
+                        for rel in intersection_extensions:
                             ext_relation = rel["property"]
                             ext_target = rel["filler"]
                             if ext_relation in input_relations and annoton.enabled_by != ext_target:

@@ -237,6 +237,7 @@ def filter_no_rules_broken(annots):
             filtered.append(a)
     return filtered
 
+
 class ExtensionsMapper():
     def __init__(self):
         self.go_aspector = CachedGoAspector("resources/aspect_lookup.json")
@@ -244,6 +245,7 @@ class ExtensionsMapper():
     def extensions_list(self, intersection_extensions):
         ext_list = []
         # Assuming these extensions are already separated by comma
+        intersection_extensions = self.dedupe_extensions(intersection_extensions)
         for i in intersection_extensions:
             relation, ext_term = i['property'], i['filler']
             term_prefix = ext_term.split(":")[0]
@@ -280,6 +282,13 @@ class ExtensionsMapper():
         # Standardize key - ex:
         #   ["part_of(GO:aspect),part_of(UBERON:)"]
         return following_rules(ext_list, aspect)
+
+    def dedupe_extensions(self, extensions):
+        new_extensions = []
+        for i in extensions:
+            if i not in new_extensions:
+                new_extensions.append(i)
+        return new_extensions
 
 d = [
     "GeneDB_tsetse",
@@ -341,6 +350,7 @@ if __name__ == "__main__":
                 go_term = g[3]
                 aspect = extensions_mapper.go_aspector.go_aspect(go_term)
                 ontobio_extensions = gpad_parser._parse_full_extension_expression(g[10])
+                ontobio_extensions = extensions_mapper.dedupe_extensions(ontobio_extensions)
                 # ontobio_pattern = {
                 #     'union_of': [
                 #         {
