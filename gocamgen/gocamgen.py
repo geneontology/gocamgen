@@ -357,7 +357,7 @@ class AssocGoCamModel(GoCamModel):
                         for rel in intersection_extensions:
                             ext_relation = rel["property"]
                             ext_target = rel["filler"]
-                            if ext_relation in input_relations and annoton.enabled_by != ext_target:
+                            if ext_relation in input_relations:
                                 logger.debug("Adding connection {} {} {}".format(annoton.enabled_by, ext_relation, ext_target))
                                 target_gene_id = self.declare_individual(ext_target)
                                 annoton.individuals[ext_target] = target_gene_id
