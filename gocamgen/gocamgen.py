@@ -334,7 +334,8 @@ class AssocGoCamModel(GoCamModel):
 
             # Translate extension - maybe add function argument for custom translations?
             if "extensions" not in a["object"]:
-                anchor_uri = self.translate_primary_annotation(a, annoton, make_new)
+                make_new = True
+                self.translate_primary_annotation(a, annoton, make_new)
             else:
                 # ext_str = ",".join(a["object"]["extensions"])
                 aspect = self.extensions_mapper.go_aspector.go_aspect(term)
