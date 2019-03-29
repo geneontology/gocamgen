@@ -314,13 +314,6 @@ class AssocGoCamModel(GoCamModel):
             # since relation is explicitly stated in GPAD
             # Standardize aspect using GPAD relations?
 
-            make_new = False
-            if "extensions" in a["object"]:
-                # Always make new triple if extensions in line?
-                make_new = True
-
-            # anchor_uri = self.translate_primary_annotation(a, annoton, make_new)
-
             # TODO stuff annot_date and contributors into annot data structure for reuse
             # Add evidence tied to axiom_ids
             annot_date = "{0:%Y-%m-%d}".format(datetime.datetime.strptime(a["date"], "%Y%m%d"))
@@ -334,8 +327,7 @@ class AssocGoCamModel(GoCamModel):
 
             # Translate extension - maybe add function argument for custom translations?
             if "extensions" not in a["object"]:
-                make_new = True
-                self.translate_primary_annotation(a, annoton, make_new)
+                self.translate_primary_annotation(a, annoton)
             else:
                 # ext_str = ",".join(a["object"]["extensions"])
                 aspect = self.extensions_mapper.go_aspector.go_aspect(term)
@@ -346,7 +338,7 @@ class AssocGoCamModel(GoCamModel):
                         int_bits.append("{}({})".format(rel["property"], rel["filler"]))
                     ext_str = ",".join(int_bits)
 
-                    anchor_uri = self.translate_primary_annotation(a, annoton, make_new)
+                    anchor_uri = self.translate_primary_annotation(a, annoton)
                     intersection_extensions = self.extensions_mapper.dedupe_extensions(uo['intersection_of'])
                     is_cool = self.extensions_mapper.annot_following_rules(intersection_extensions, aspect)
                     if is_cool:
@@ -376,7 +368,7 @@ class AssocGoCamModel(GoCamModel):
                         logger.debug("BAD: {}".format(ext_str))
         self.extensions_mapper.go_aspector.write_cache()
 
-    def translate_primary_annotation(self, annotation, annoton, make_new):
+    def translate_primary_annotation(self, annotation, annoton):
         # This will start the "act normal" function.
         # What variables do I need for passing to extension handling?
         #   anchor_uri
@@ -388,10 +380,7 @@ class AssocGoCamModel(GoCamModel):
         axiom_ids = []
         for q in annotation["qualifiers"]:
             if q == "enables":
-                if make_new:
-                    axiom_id = self.find_or_create_axiom(term, ENABLED_BY, annoton.enabled_by, annoton=annoton)
-                else:
-                    axiom_id = self.create_axiom(term, ENABLED_BY, annoton.enabled_by)
+                axiom_id = self.find_or_create_axiom(term, ENABLED_BY, annoton.enabled_by, annoton=annoton)
                 # Get enabled_by URI (owl:annotatedTarget) using axiom_id (a hack because I'm still using Annoton object with gene_connections)
                 enabled_by_uri = list(self.writer.writer.graph.triples((axiom_id, OWL.annotatedTarget, None)))[0][2]
                 anchor_uri = list(self.writer.writer.graph.triples((axiom_id, OWL.annotatedSource, None)))[0][2]
@@ -400,8 +389,9 @@ class AssocGoCamModel(GoCamModel):
             elif q == "involved_in":
                 # Try to find chain of two connected triples # TODO: Write function to find chain of any length
                 found_triples = self.triples_by_ids(upt.molecular_function, ENABLED_BY, annoton.enabled_by)
-                if not make_new and len(found_triples) > 0:
-                    make_new = True  # Reset in case we don't find a matching triple-pair
+                # What is the unit of unique-ness? Here, it's the 2-triple chain
+                make_new = True
+                if len(found_triples) > 0:
                     for mf_triple in found_triples:
                         found_mf_uri = mf_triple[0]
                         found_triples = self.triples_by_ids(found_mf_uri, PART_OF, term)
@@ -429,10 +419,7 @@ class AssocGoCamModel(GoCamModel):
                 do_stuff = 1
             else:
                 relation_uri = URIRef(expand_uri_wrapper(self.relations_dict[q]))
-                if make_new:
-                    axiom_id = self.create_axiom(annoton.enabled_by, relation_uri, term)
-                else:
-                    axiom_id = self.find_or_create_axiom(annoton.enabled_by, relation_uri, term)
+                axiom_id = self.create_axiom(annoton.enabled_by, relation_uri, term)
                 # Get enabled_by URI (owl:annotatedSource) using axiom_id
                 enabled_by_uri = list(self.writer.writer.graph.triples((axiom_id, OWL.annotatedSource, None)))[0][2]
                 annoton.individuals[annoton.enabled_by] = enabled_by_uri

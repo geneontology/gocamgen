@@ -47,6 +47,7 @@ class TriplePatternFinder:
     #     # Can we accomplish same thing by constructing sub-model from query pattern and checking against model?
     #     do_stuff = 1
 
+    # TODO: Add 'exact' arg for requiring that found pattern is of exact length as query (nothing continuing on either side)
     def find_pattern_recursive(self, model, pattern: TriplePattern, candidate_chains=[]):
         # break down pattern into component triples
         connecting_uri = None
