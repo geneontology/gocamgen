@@ -2,7 +2,7 @@ from ontobio.rdfgen.assoc_rdfgen import CamRdfTransform, TurtleRdfWriter, genid,
 from ontobio.vocabulary.relations import OboRO, Evidence
 from ontobio.vocabulary.upper import UpperLevel
 from ontobio.util.go_utils import GoAspector
-from prefixcommons.curie_util import expand_uri
+from prefixcommons.curie_util import expand_uri, contract_uri
 from rdflib.namespace import OWL, RDF
 from rdflib import Literal
 from rdflib.term import URIRef
@@ -14,8 +14,7 @@ import argparse
 import datetime
 import os.path as path
 import logging
-from gpad_extensions_mapper import ExtensionsMapper
-from connections import GeneConnection, GeneConnectionSet
+from triple_pattern_finder import TriplePattern, TriplePatternFinder, TriplePair, TriplePairCollection
 
 # logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -36,6 +35,10 @@ RDFS = Namespace("http://www.w3.org/2000/01/rdf-schema#")
 
 def expand_uri_wrapper(id):
     uri = expand_uri(id, cmaps=[prefix_context])
+    return uri
+
+def contract_uri_wrapper(id):
+    uri = contract_uri(id, cmaps=[prefix_context])
     return uri
 
 HAS_SUPPORTING_REFERENCE = URIRef(expand_uri_wrapper("dc:source"))
@@ -256,6 +259,13 @@ class GoCamModel():
                 ind_list.append(t[2])
         return ind_list
 
+    def class_for_uri(self, uri):
+        try:
+            class_curie = contract_uri_wrapper(self.individual_label_for_uri(uri)[0])[0]
+            return class_curie
+        except:
+            return None
+
     def axioms_for_source(self, source, property_uri=None):
         if property_uri is None:
             property_uri = OWL.annotatedSource
@@ -369,11 +379,6 @@ class AssocGoCamModel(GoCamModel):
         self.extensions_mapper.go_aspector.write_cache()
 
     def translate_primary_annotation(self, annotation, annoton):
-        # This will start the "act normal" function.
-        # What variables do I need for passing to extension handling?
-        #   anchor_uri
-        #   annoton # This is initialized outside "act_normal" function
-        #
         term = annotation["object"]["id"]
 
         anchor_uri = None
@@ -388,22 +393,19 @@ class AssocGoCamModel(GoCamModel):
                 axiom_ids.append(axiom_id)
             elif q == "involved_in":
                 # Try to find chain of two connected triples # TODO: Write function to find chain of any length
-                found_triples = self.triples_by_ids(upt.molecular_function, ENABLED_BY, annoton.enabled_by)
-                # What is the unit of unique-ness? Here, it's the 2-triple chain
-                make_new = True
-                if len(found_triples) > 0:
-                    for mf_triple in found_triples:
-                        found_mf_uri = mf_triple[0]
-                        found_triples = self.triples_by_ids(found_mf_uri, PART_OF, term)
-                        if len(found_triples) > 0:
-                            # Found both triples. Add em and get out of here
-                            bp_triple = found_triples[0]
-                            axiom_ids.append(self.find_bnode(mf_triple))
-                            axiom_ids.append(self.find_bnode(bp_triple))
-                            anchor_uri = found_mf_uri
-                            make_new = False
-                            break
-                if make_new:
+                query_pair = TriplePair((upt.molecular_function, ENABLED_BY, annoton.enabled_by), (upt.molecular_function, PART_OF, term), connecting_entity=upt.molecular_function)
+                query_pair_collection = TriplePairCollection()
+                query_pair_collection.chain_collection.append(query_pair)
+                result_pair_collection = TriplePatternFinder().find_connected_pattern(self, query_pair_collection)
+                # From result_pair_collection, we need axiom_ids of both triples (self.find_bnode()) and anchor_uri (pair.connecting_entity_uri())
+                if result_pair_collection is not None:
+                    # Only need one
+                    triple_pair = result_pair_collection.chain_collection[0]
+                    # we need axiom_ids of both triples
+                    for tr in triple_pair.triples:
+                        axiom_ids.append(self.find_bnode(tr))
+                    anchor_uri = triple_pair.connecting_entity_uri(self)  # Root MF will be the connecting entity
+                else:
                     mf_root_uri = self.declare_individual(upt.molecular_function)
                     gp_uri = self.declare_individual(annoton.enabled_by)
                     term_uri = self.declare_individual(term)
@@ -414,6 +416,11 @@ class AssocGoCamModel(GoCamModel):
                     annoton.individuals[annoton.enabled_by] = enabled_by_uri
                     anchor_uri = mf_root_uri
                     axiom_ids.append(self.add_axiom(self.writer.emit(mf_root_uri, PART_OF, term_uri)))
+            # elif q in ["acts_upstream_of", "acts_upstream_of_negative_effect", "acts_upstream_of_or_within",
+            #            "acts_upstream_of_positive_effect"]:
+            #     # Look for existing GP <- enabled_by [root MF] -> causally_upstream_of BP
+            #     axiom_ids.append("stuff")
+            #     # If no chain found create one.
             elif q == "NOT":
                 # Try it in UI and look at OWL
                 do_stuff = 1
