@@ -2,6 +2,7 @@ from ontobio.rdfgen.assoc_rdfgen import CamRdfTransform, TurtleRdfWriter, genid,
 from ontobio.vocabulary.relations import OboRO, Evidence
 from ontobio.vocabulary.upper import UpperLevel
 from ontobio.util.go_utils import GoAspector
+from ontobio.ontol_factory import OntologyFactory
 from prefixcommons.curie_util import expand_uri, contract_uri
 from rdflib.namespace import OWL, RDF
 from rdflib import Literal
@@ -51,6 +52,28 @@ COLOCALIZES_WITH = URIRef(expand_uri_wrapper(ro.colocalizes_with))
 CONTRIBUTES_TO = URIRef(expand_uri_wrapper("RO:0002326"))
 MOLECULAR_FUNCTION = URIRef(expand_uri_wrapper(upt.molecular_function))
 REGULATES = URIRef(expand_uri_wrapper("RO:0002211"))
+
+# RO_ONTOLOGY = OntologyFactory().create("http://purl.obolibrary.org/obo/ro.owl")  # Need propertyChainAxioms to parse (https://github.com/biolink/ontobio/issues/312)
+ACTS_UPSTREAM_OF_RELATIONS = {
+    "acts_upstream_of": "RO:0002263",
+    "acts_upstream_of_or_within": "RO:0002264",
+    "acts upstream of or within, positive effect": "RO:0004032",
+    "acts upstream of or within, negative effect": "RO:0004033",
+    "acts_upstream_of_positive_effect": "RO:0004034",
+    "acts_upstream_of_negative_effect": "RO:0004035",
+}
+ENABLES_O_RELATION_LOOKUP = {
+    # "acts upstream of": "causally upstream of",
+    "RO:0002263": "RO:0002411",
+    # "acts upstream of or within": "causally upstream of or within",
+    "RO:0002264": "RO:0002418",
+    # "acts upstream of or within, positive effect": "causally upstream of or within, positive effect",
+    "RO:0004032": "RO:0004047",
+    # "acts upstream of or within, negative effect": "causally upstream of or within, negative effect",
+    "RO:0004033": "RO:0004046",
+    "RO:0004034": "RO:0002304",
+    "RO:0004035": "RO:0002305"
+}
 
 now = datetime.datetime.now()
 
@@ -295,6 +318,7 @@ class AssocGoCamModel(GoCamModel):
         GoCamModel.__init__(self, modeltitle, connection_relations)
         self.associations = assocs
         # self.ontology = ontology
+        # self.ro_ontology = ro_ontology
         self.extensions_mapper = None
         self.default_contributor = "http://orcid.org/0000-0002-6659-0416"
 
@@ -418,9 +442,33 @@ class AssocGoCamModel(GoCamModel):
                     axiom_ids.append(self.add_axiom(self.writer.emit(mf_root_uri, PART_OF, term_uri)))
             # elif q in ["acts_upstream_of", "acts_upstream_of_negative_effect", "acts_upstream_of_or_within",
             #            "acts_upstream_of_positive_effect"]:
-            #     # Look for existing GP <- enabled_by [root MF] -> causally_upstream_of BP
-            #     axiom_ids.append("stuff")
-            #     # If no chain found create one.
+            elif q in ACTS_UPSTREAM_OF_RELATIONS:
+                # Look for existing GP <- enabled_by [root MF] -> causally_upstream_of BP
+                causally_relation = ENABLES_O_RELATION_LOOKUP[ACTS_UPSTREAM_OF_RELATIONS[q]]
+                causally_relation_uri = URIRef(expand_uri_wrapper(causally_relation))
+                query_pair = TriplePair((upt.molecular_function, ENABLED_BY, annoton.enabled_by),
+                                        (upt.molecular_function, causally_relation_uri, term),
+                                        connecting_entity=upt.molecular_function)
+                query_pair_collection = TriplePairCollection()
+                query_pair_collection.chain_collection.append(query_pair)
+                result_pair_collection = TriplePatternFinder().find_connected_pattern(self, query_pair_collection)
+                if result_pair_collection is not None:
+                    triple_pair = result_pair_collection.chain_collection[0]
+                    for tr in triple_pair.triples:
+                        axiom_ids.append(self.find_bnode(tr))
+                    anchor_uri = triple_pair.connecting_entity_uri(self)
+                else:
+                    # If no chain found create one.
+                    mf_root_uri = self.declare_individual(upt.molecular_function)
+                    gp_uri = self.declare_individual(annoton.enabled_by)
+                    term_uri = self.declare_individual(term)
+                    axiom_id = self.add_axiom(self.writer.emit(mf_root_uri, ENABLED_BY, gp_uri))
+                    axiom_ids.append(axiom_id)
+                    # Get enabled_by URI (owl:annotatedTarget) using axiom_id
+                    # enabled_by_uri = list(self.writer.writer.graph.triples((axiom_id, OWL.annotatedTarget, None)))[0][2]
+                    # annoton.individuals[annoton.enabled_by] = enabled_by_uri
+                    anchor_uri = mf_root_uri
+                    axiom_ids.append(self.add_axiom(self.writer.emit(mf_root_uri, causally_relation_uri, term_uri)))
             elif q == "NOT":
                 # Try it in UI and look at OWL
                 do_stuff = 1

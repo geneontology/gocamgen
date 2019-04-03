@@ -94,6 +94,7 @@ class AssocFilter:
 class GoCamBuilder:
     def __init__(self):
         self.ext_mapper = ExtensionsMapper()
+        # self.ro_ontology = OntologyFactory().create("http://purl.obolibrary.org/obo/ro.owl")
 
     def translate_to_model(self, gene, assocs):
         model = AssocGoCamModel(gene, assocs)
