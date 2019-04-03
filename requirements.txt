@@ -1,1 +1,1 @@
-ontobio==1.7.1
+ontobio==1.9.4
