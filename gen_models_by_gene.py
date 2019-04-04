@@ -247,5 +247,6 @@ if __name__ == "__main__":
         with open(report_file_path, "w+") as reportf:
             for k in gpad_file_metadata:
                 reportf.write("{}: {}\n".format(k, gpad_file_metadata[k]))
+            # TODO FilterRule().__str__() to display filters
             reportf.write("# of models generated: {}\n".format(model_count))
         logger.info("Report file generated at {}".format(report_file_path))

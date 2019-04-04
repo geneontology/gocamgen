@@ -359,14 +359,15 @@ class AssocGoCamModel(GoCamModel):
             if len(contributors) == 0:
                 contributors = [self.default_contributor]
 
+            annotation_extensions = get_annot_extensions(a)
+
             # Translate extension - maybe add function argument for custom translations?
-            if "extensions" not in a["object"]:
+            if len(annotation_extensions) == 0:
                 self.translate_primary_annotation(a, annoton)
             else:
-                # ext_str = ",".join(a["object"]["extensions"])
                 aspect = self.extensions_mapper.go_aspector.go_aspect(term)
 
-                for uo in a["object"]["extensions"]['union_of']:
+                for uo in annotation_extensions['union_of']:
                     int_bits = []
                     for rel in uo["intersection_of"]:
                         int_bits.append("{}({})".format(rel["property"], rel["filler"]))
@@ -501,6 +502,14 @@ class AssocGoCamModel(GoCamModel):
                               comment=source_line)
 
         return anchor_uri
+
+
+def get_annot_extensions(annot):
+    if "object_extensions" in annot:
+        return annot["object_extensions"]
+    elif "extensions" in annot["object"]:
+        return annot["object"]["extensions"]
+    return {}
 
 
 class ReferencePreference():
