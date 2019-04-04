@@ -11,6 +11,19 @@ from rdflib.term import URIRef
 # logger.setLevel(logging.DEBUG)
 
 
+def gen_model(gpad_file, test_gene, filter_rule):
+    extractor = AssocExtractor(gpad_file, filter_rule)
+    assocs_by_gene = extractor.group_assocs()
+
+    builder = GoCamBuilder()
+    if test_gene not in assocs_by_gene:
+        # print("ERROR: specific gene {} not found in filtered annotation list".format(test_gene))
+        return None
+    else:
+        model = builder.translate_to_model(test_gene, assocs_by_gene[test_gene])
+        return model
+
+
 class TestReferencePreference(unittest.TestCase):
 
     def test_ref_picker(self):
@@ -25,27 +38,14 @@ class TestReferencePreference(unittest.TestCase):
         result = ref_picker.pick(test_refs)
         self.assertEqual(result, "PMID:9834189")
 
+
 class TestGoCamModel(unittest.TestCase):
 
     def test_triple_finder(self):
-        gpad_file = "resources/test/wb_6498.gpad"
         test_gene = "WB:WBGene00006498"
-        filter_rule = WBFilterRule()
-
-        # gpad_file = "mgi_87859.gpad"
-        # test_gene = "MGI:MGI:87859"
-        # filter_rule = MGIFilterRule()
-
-        extractor = AssocExtractor(gpad_file, filter_rule)
-        assocs_by_gene = extractor.group_assocs()
-        print("{} distinct genes".format(len(assocs_by_gene)))
-
-        builder = GoCamBuilder()
-        if test_gene not in assocs_by_gene:
-            print("ERROR: specific gene {} not found in filtered annotation list".format(test_gene))
-        else:
-            model = builder.translate_to_model(test_gene, assocs_by_gene[test_gene])
-
+        model = gen_model(gpad_file="resources/test/wb_6498.gpad", test_gene=test_gene,
+                          filter_rule=WBFilterRule())
+        if model:
             # Get model.writer.graph whatever and check for loose evidence (not attached to axioms)
             # Orphaned evidence - how to I find these in debugger? They're in rdflib writer somewhere
 
@@ -58,30 +58,24 @@ class TestGoCamModel(unittest.TestCase):
 
             triple_finder = TriplePatternFinder()
             a_triples = triple_finder.find_pattern_recursive(model, pattern_a)
-            print("A count: {}".format(len(a_triples)))
+            # print("A count: {}".format(len(a_triples)))
             b_triples = triple_finder.find_pattern_recursive(model, pattern_b)
-            print("B count: {}".format(len(b_triples)))
+            # print("B count: {}".format(len(b_triples)))
             found_chains = triple_finder.find_pattern_recursive(model, whole_pattern)
             # print(found_chains)
-            print("Chain count: {}".format(len(found_chains)))
-            for fc in found_chains:
-                print(contract_uri_wrapper(model.individual_label_for_uri(fc[1][2])[0])[0])
+            # print("Chain count: {}".format(len(found_chains)))
+            # for fc in found_chains:
+            #     print(contract_uri_wrapper(model.individual_label_for_uri(fc[1][2])[0])[0])
 
-            triple_pair = TriplePair(pattern_a.ordered_triples[0], pattern_b.ordered_triples[0], connecting_entity="GO:0003674")
+            triple_pair = TriplePair(pattern_a.ordered_triples[0], pattern_b.ordered_triples[0],
+                                     connecting_entity="GO:0003674")
             tp_collection = TriplePairCollection()
             tp_collection.chain_collection.append(triple_pair)
             uri_tp_collection = triple_finder.find_connected_pattern(model, tp_collection)
-            for pair in uri_tp_collection.chain_collection:
-                # print(model.class_for_uri(pair.triples[0][0]))
-                # print(model.class_for_uri(pair.triples[0][2]))
-                # print(model.class_for_uri(pair.triples[1][0]))
-                # print(model.class_for_uri(pair.triples[1][2]))
-                print(pair.triples[0][0])
-                print(pair.triples[0][2])
-                print(pair.triples[1][0])
-                print(pair.triples[1][2])
-
-        self.assertEqual(1, 1)
+            
+            self.assertGreaterEqual(len(uri_tp_collection.chain_collection), 1)
+        else:
+            self.fail("Couldn't generate model for WB:WBGene00006498")
 
     def test_evidence(self):
         # gpad_file = "wb_903.gpad"
@@ -89,6 +83,19 @@ class TestGoCamModel(unittest.TestCase):
         # filter_rule = WBFilterRule()
 
         self.assertEqual(1, 1)
+
+    def test_has_input(self):
+        # See https://github.com/geneontology/gocamgen/issues/39#issuecomment-479988904 for background
+        model = gen_model(gpad_file="resources/test/wb.gpad.WBGene00003167", test_gene="WB:WBGene00003167",
+                          filter_rule=WBFilterRule())
+        if model:
+            # Look for translation of 'GO:0000977 has_direct_input(WB:WBGene00036254)'
+            found_triples = model.triples_by_ids("GO:0000977", URIRef(expand_uri_wrapper("RO:0002233")),
+                                                 "WB:WBGene00036254")
+            self.assertGreaterEqual(len(found_triples), 1, "No has_input extensions translated")
+        else:
+            self.fail("Couldn't generate model for WB:WBGene00003167")
+
 
 if __name__ == '__main__':
     unittest.main()
