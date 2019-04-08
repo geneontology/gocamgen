@@ -441,8 +441,6 @@ class AssocGoCamModel(GoCamModel):
                     annoton.individuals[annoton.enabled_by] = enabled_by_uri
                     anchor_uri = mf_root_uri
                     axiom_ids.append(self.add_axiom(self.writer.emit(mf_root_uri, PART_OF, term_uri)))
-            # elif q in ["acts_upstream_of", "acts_upstream_of_negative_effect", "acts_upstream_of_or_within",
-            #            "acts_upstream_of_positive_effect"]:
             elif q in ACTS_UPSTREAM_OF_RELATIONS:
                 # Look for existing GP <- enabled_by [root MF] -> causally_upstream_of BP
                 causally_relation = ENABLES_O_RELATION_LOOKUP[ACTS_UPSTREAM_OF_RELATIONS[q]]
@@ -465,9 +463,6 @@ class AssocGoCamModel(GoCamModel):
                     term_uri = self.declare_individual(term)
                     axiom_id = self.add_axiom(self.writer.emit(mf_root_uri, ENABLED_BY, gp_uri))
                     axiom_ids.append(axiom_id)
-                    # Get enabled_by URI (owl:annotatedTarget) using axiom_id
-                    # enabled_by_uri = list(self.writer.writer.graph.triples((axiom_id, OWL.annotatedTarget, None)))[0][2]
-                    # annoton.individuals[annoton.enabled_by] = enabled_by_uri
                     anchor_uri = mf_root_uri
                     axiom_ids.append(self.add_axiom(self.writer.emit(mf_root_uri, causally_relation_uri, term_uri)))
             elif q == "NOT":
@@ -475,7 +470,8 @@ class AssocGoCamModel(GoCamModel):
                 do_stuff = 1
             else:
                 relation_uri = URIRef(expand_uri_wrapper(self.relations_dict[q]))
-                axiom_id = self.create_axiom(annoton.enabled_by, relation_uri, term)
+                # TODO: should check that existing axiom/triple isn't connected to anything else; length matches exactly
+                axiom_id = self.find_or_create_axiom(annoton.enabled_by, relation_uri, term)
                 # Get enabled_by URI (owl:annotatedSource) using axiom_id
                 enabled_by_uri = list(self.writer.writer.graph.triples((axiom_id, OWL.annotatedSource, None)))[0][2]
                 annoton.individuals[annoton.enabled_by] = enabled_by_uri

@@ -72,7 +72,7 @@ class TestGoCamModel(unittest.TestCase):
             tp_collection = TriplePairCollection()
             tp_collection.chain_collection.append(triple_pair)
             uri_tp_collection = triple_finder.find_connected_pattern(model, tp_collection)
-            
+
             self.assertGreaterEqual(len(uri_tp_collection.chain_collection), 1)
         else:
             self.fail("Couldn't generate model for WB:WBGene00006498")
@@ -95,6 +95,19 @@ class TestGoCamModel(unittest.TestCase):
             self.assertGreaterEqual(len(found_triples), 1, "No has_input extensions translated")
         else:
             self.fail("Couldn't generate model for WB:WBGene00003167")
+
+    def test_no_dup_individuals(self):
+        # See https://github.com/geneontology/gocamgen/issues/40
+        model = gen_model(gpad_file="resources/test/mgi.gpa.MGI_2159711", test_gene="MGI:MGI:2159711",
+                          filter_rule=MGIFilterRule())
+
+        if model:
+            # Look for 'MGI:MGI:2159711 PART_OF GO:0044297'. Should only be one.
+            found_triples = model.triples_by_ids("MGI:MGI:2159711", gocamgen.gocamgen.PART_OF,
+                                                 "GO:0044297")
+            self.assertEqual(len(found_triples), 1)
+        else:
+            self.fail("Couldn't generate model for MGI:MGI:2159711")
 
 
 if __name__ == '__main__':
