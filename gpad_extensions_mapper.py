@@ -21,9 +21,6 @@ parser.add_argument("-q", "--pattern_outfile")
 parser.add_argument("-r", "--pattern_sourcefile")
 
 ontology_prefixes = []
-# with open("go_context.jsonld") as gcf:
-#     context_prefixes = json.load(gcf)
-# for k, v in context_prefixes['@context'].items():
 for k, v in prefix_context.items():
     if v.startswith("http://purl.obolibrary.org/obo/"):
         ontology_prefixes.append(k)
@@ -43,6 +40,49 @@ acceptable_evidence_codes = [
     "IEP"
 ]
 ecomap = EcoMap()
+
+# Extension rules
+FUNCTION_SINGLES_ONLY = [
+    "occurs_in(GO:C)",
+    "occurs_in(CL)",
+    "occurs_in(UBERON)",
+    "occurs_in(EMAPA)",
+    "has_input(geneID)",
+    "has_input(CHEBI)",
+    "has_direct_input(geneID)",
+    "has_direct_input(CHEBI)",
+    "happens_during(GO:P)",
+    "part_of(GO:P)",
+    "has_regulation_target(geneID)",
+    "activated_by(CHEBI)",
+    "inhibited_by(CHEBI)"
+]
+COMPONENT_SINGLES_ONLY = [
+    "part_of(GO:C)",
+    "part_of(CL)",
+    "part_of(UBERON)",
+    "part_of(EMAPA)"
+]
+PROCESS_SINGLES_ONLY = [
+    "occurs_in(GO:C)",
+    "occurs_in(CL)",
+    "occurs_in(UBERON)",
+    "occurs_in(EMAPA)",
+    "has_input(geneID)",
+    "has_input(CHEBI)",
+    "has_direct_input(geneID)",
+    "has_direct_input(CHEBI)",
+    "part_of(GO:P)"
+]
+EXTENSION_RELATION_UNIVERSE = []  # Should this also be aspect-specific?
+for r in FUNCTION_SINGLES_ONLY + COMPONENT_SINGLES_ONLY + PROCESS_SINGLES_ONLY:
+    if r not in EXTENSION_RELATION_UNIVERSE:
+        EXTENSION_RELATION_UNIVERSE.append(r)
+# Add remaining extensions not having cardinality restrictions yet we know how to translate them
+EXTENSION_RELATION_UNIVERSE.append([
+    "has_regulation_target(geneID)"
+])
+
 
 gaf_indices = {}
 gpad_indices = {
@@ -160,69 +200,63 @@ def following_rules(extension_list, aspect):
         else:
             ext_counts[e] = 1
 
-    function_singles_only = [
-        "occurs_in(GO:C)",
-        "occurs_in(CL)",
-        "occurs_in(UBERON)",
-        "occurs_in(EMAPA)",
-        "has_input(geneID)",
-        "has_input(CHEBI)",
-        "has_direct_input(geneID)",
-        "has_direct_input(CHEBI)",
-        "happens_during(GO:P)",
-        "part_of(GO:P)",
-        "has_regulation_target(geneID)",
-        "activated_by(CHEBI)",
-        "inhibited_by(CHEBI)"
-    ]
-    # component_singles_only = [
+    # function_singles_only = [
     #     "occurs_in(GO:C)",
     #     "occurs_in(CL)",
     #     "occurs_in(UBERON)",
-    #     "occurs_in(EMAPA)"
+    #     "occurs_in(EMAPA)",
+    #     "has_input(geneID)",
+    #     "has_input(CHEBI)",
+    #     "has_direct_input(geneID)",
+    #     "has_direct_input(CHEBI)",
+    #     "happens_during(GO:P)",
+    #     "part_of(GO:P)",
+    #     "has_regulation_target(geneID)",
+    #     "activated_by(CHEBI)",
+    #     "inhibited_by(CHEBI)"
     # ]
-    component_singles_only = [
-        "part_of(GO:C)",
-        "part_of(CL)",
-        "part_of(UBERON)",
-        "part_of(EMAPA)"
-    ]
-    process_singles_only = [
-        "occurs_in(GO:C)",
-        "occurs_in(CL)",
-        "occurs_in(UBERON)",
-        "occurs_in(EMAPA)",
-        "has_input(geneID)",
-        "has_input(CHEBI)",
-        "has_direct_input(geneID)",
-        "has_direct_input(CHEBI)",
-        "part_of(GO:P)"
-    ]
+    # component_singles_only = [
+    #     "part_of(GO:C)",
+    #     "part_of(CL)",
+    #     "part_of(UBERON)",
+    #     "part_of(EMAPA)"
+    # ]
+    # process_singles_only = [
+    #     "occurs_in(GO:C)",
+    #     "occurs_in(CL)",
+    #     "occurs_in(UBERON)",
+    #     "occurs_in(EMAPA)",
+    #     "has_input(geneID)",
+    #     "has_input(CHEBI)",
+    #     "has_direct_input(geneID)",
+    #     "has_direct_input(CHEBI)",
+    #     "part_of(GO:P)"
+    # ]
     combos_to_check_for = [
         ["occurs_in(UBERON)", "occurs_in(EMAPA)"]
     ]
     if aspect == "F":
-        for s in function_singles_only:
+        for s in FUNCTION_SINGLES_ONLY:
             if s in ext_counts and ext_counts[s] > 1:
                 return False
         for ek in ext_counts.keys():
-            if ek not in function_singles_only:
+            if ek not in FUNCTION_SINGLES_ONLY:
                 return False    # unrecognised relation-term combo
         combos_to_check_for.append(["has_input(geneID)", "has_input(CHEBI)",
                                     "has_direct_input(geneID)", "has_direct_input(CHEBI)"])
     if aspect == "C":
-        for s in component_singles_only:
+        for s in COMPONENT_SINGLES_ONLY:
             if s in ext_counts and ext_counts[s] > 1:
                 return False
         for ek in ext_counts.keys():
-            if ek not in component_singles_only:
+            if ek not in COMPONENT_SINGLES_ONLY:
                 return False    # unrecognised relation-term combo
     if aspect == "P":
-        for s in process_singles_only:
+        for s in PROCESS_SINGLES_ONLY:
             if s in ext_counts and ext_counts[s] > 1:
                 return False
         for ek in ext_counts.keys():
-            if ek not in process_singles_only:
+            if ek not in PROCESS_SINGLES_ONLY:
                 return False    # unrecognised relation-term combo
         combos_to_check_for.append(["has_input(geneID)", "has_input(CHEBI)",
                                     "has_direct_input(geneID)", "has_direct_input(CHEBI)"])

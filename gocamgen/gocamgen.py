@@ -54,6 +54,12 @@ MOLECULAR_FUNCTION = URIRef(expand_uri_wrapper(upt.molecular_function))
 REGULATES = URIRef(expand_uri_wrapper("RO:0002211"))
 
 # RO_ONTOLOGY = OntologyFactory().create("http://purl.obolibrary.org/obo/ro.owl")  # Need propertyChainAxioms to parse (https://github.com/biolink/ontobio/issues/312)
+INPUT_RELATIONS = {
+    #TODO Create rule for deciding (MOD-specific?) whether to convert has_direct_input to has input
+    # "has_direct_input": "RO:0002400",
+    "has_direct_input": "RO:0002233",
+    "has input": "RO:0002233"
+}
 ACTS_UPSTREAM_OF_RELATIONS = {
     "acts_upstream_of": "RO:0002263",
     "acts_upstream_of_or_within": "RO:0002264",
@@ -62,6 +68,11 @@ ACTS_UPSTREAM_OF_RELATIONS = {
     "acts_upstream_of_positive_effect": "RO:0004034",
     "acts_upstream_of_negative_effect": "RO:0004035",
 }
+HAS_REGULATION_TARGET_RELATIONS = {
+    # WB:WBGene00013591 involved_in GO:0042594
+    "has_regulation_target": ""
+}
+# TODO: Grab these from RO property chain axioms
 ENABLES_O_RELATION_LOOKUP = {
     # "acts upstream of": "causally upstream of",
     "RO:0002263": "RO:0002411",
@@ -74,6 +85,21 @@ ENABLES_O_RELATION_LOOKUP = {
     "RO:0004034": "RO:0002304",
     "RO:0004035": "RO:0002305"
 }
+
+
+def has_regulation_target_bucket(ontology, term):
+    ancestors = ontology.ancestors(term, reflexive=True)
+    buckets = []
+    if "GO:0065009" in ancestors:
+        buckets.append("a")
+    if "GO:0010468" in ancestors:
+        buckets.append("b")
+    if "GO:0002092" in ancestors or "GO:0042176" in ancestors:
+        buckets.append("c")
+    if "GO:0019538" in ancestors or "GO:0032880" in ancestors:
+        buckets.append("d")
+    return buckets
+
 
 now = datetime.datetime.now()
 
@@ -317,29 +343,20 @@ class AssocGoCamModel(GoCamModel):
     def __init__(self, modeltitle, assocs, connection_relations=None):
         GoCamModel.__init__(self, modeltitle, connection_relations)
         self.associations = assocs
-        # self.ontology = ontology
+        self.ontology = None
         # self.ro_ontology = ro_ontology
         self.extensions_mapper = None
         self.default_contributor = "http://orcid.org/0000-0002-6659-0416"
 
     def translate(self):
-        input_relations = {
-            #TODO Create rule for deciding (MOD-specific?) whether to convert has_direct_input to has input
-            # "has_direct_input": "RO:0002400",
-            "has_direct_input": "RO:0002233",
-            "has input": "RO:0002233"
-        }
+        # input_relations = {
+        #     #TODO Create rule for deciding (MOD-specific?) whether to convert has_direct_input to has input
+        #     # "has_direct_input": "RO:0002400",
+        #     "has_direct_input": "RO:0002233",
+        #     "has input": "RO:0002233"
+        # }
 
         for a in self.associations:
-
-            # Divert annotations to either "no-extensions" or "with-extensions"
-            # if "extensions" not in a["object"]:
-            #   act normal
-            # else:
-            #   for uo in a["object"]["extensions"]['union_of']:
-            #       act normal but work with individual extension (uo)
-            #
-            # How to code this "act normal" function?
 
             annoton = Annoton(a["subject"]["id"], [a])
             term = a["object"]["id"]
@@ -378,19 +395,14 @@ class AssocGoCamModel(GoCamModel):
                     is_cool = self.extensions_mapper.annot_following_rules(intersection_extensions, aspect)
                     if is_cool:
                         logger.debug("GOOD: {}".format(ext_str))
-                        # Start with has_input/has_direct_input extensions
-                        # Ex. python3 gen_models_by_gene.py -g resources/mgi.gpa.test.gpa -m MGI -s MGI:MGI:87859
-                        # for uo in a["object"]["extensions"]['union_of']:
                         for rel in intersection_extensions:
                             ext_relation = rel["property"]
                             ext_target = rel["filler"]
-                            if ext_relation in input_relations:
+                            if ext_relation in INPUT_RELATIONS:
                                 logger.debug("Adding connection {} {} {}".format(annoton.enabled_by, ext_relation, ext_target))
                                 target_gene_id = self.declare_individual(ext_target)
                                 annoton.individuals[ext_target] = target_gene_id
-                                # connection = GeneConnection(annoton.enabled_by, ext_target, term, ext_relation, a)
-                                # self.add_connection_new(connection, annoton)
-                                axiom_id = self.find_or_create_axiom(anchor_uri, URIRef(expand_uri_wrapper(input_relations[ext_relation])), target_gene_id)
+                                axiom_id = self.find_or_create_axiom(anchor_uri, URIRef(expand_uri_wrapper(INPUT_RELATIONS[ext_relation])), target_gene_id)
                                 self.add_evidence(axiom_id, a["evidence"]["type"],
                                                   a["evidence"]["has_supporting_reference"],
                                                   contributors=contributors,
@@ -399,6 +411,9 @@ class AssocGoCamModel(GoCamModel):
                                 # Nice-to-have functions:
                                 # add_axiom(triple, evidence=[])
                                 # add_evidence_to_axiom(axiom_id, evidence)
+                            elif ext_relation in HAS_REGULATION_TARGET_RELATIONS:
+                                buckets = has_regulation_target_bucket(self.ontology, term)
+                                print("{} {}: {}".format(annoton.enabled_by, term, buckets))
                     else:
                         logger.debug("BAD: {}".format(ext_str))
         self.extensions_mapper.go_aspector.write_cache()

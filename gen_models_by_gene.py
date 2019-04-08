@@ -100,10 +100,12 @@ class GoCamBuilder:
     def __init__(self):
         self.ext_mapper = ExtensionsMapper()
         # self.ro_ontology = OntologyFactory().create("http://purl.obolibrary.org/obo/ro.owl")
+        self.go_ontology = OntologyFactory().create("go")
 
     def translate_to_model(self, gene, assocs):
         model = AssocGoCamModel(gene, assocs)
         model.extensions_mapper = self.ext_mapper
+        model.ontology = self.go_ontology
         model.translate()
 
         return model

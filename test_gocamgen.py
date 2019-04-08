@@ -109,6 +109,17 @@ class TestGoCamModel(unittest.TestCase):
         else:
             self.fail("Couldn't generate model for MGI:MGI:2159711")
 
+    def test_has_regulation_target(self):
+        # Examples:
+        # F - MGI:MGI:107771 GO:0005096 'has_regulation_target(MGI:MGI:97846)|has_regulation_target(MGI:MGI:2180784)'
+        # P - WB:WBGene00013591 GO:0042594 'causally_upstream_of(GO:0001934),has_regulation_target(WB:WBGene00008480)'
+        # Which has_regulation_target bucket does this fall into? None so far (GO:0042594 is "response to starvation")
+        bucket = gocamgen.gocamgen.has_regulation_target_bucket("3852598")
+
+        model = gen_model(gpad_file="resources/test/wb.gpad.WBGene00013591", test_gene="WB:WBGene00013591",
+                          filter_rule=WBFilterRule())
+
+        self.assertEqual(1, 1)
 
 if __name__ == '__main__':
     unittest.main()
