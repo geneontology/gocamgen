@@ -1,4 +1,5 @@
 #from gocamgen.gocamgen import AssocGoCamModel
+from utils import contract_uri_wrapper
 
 ### Simple example: 'GP --enabled_by--> MF --part_of--> BP'
 ### First find all 'GP --enabled_by--> MF' triples
@@ -13,9 +14,8 @@ class TriplePattern:
 
 
 class ConnectedTriplePattern(TriplePattern):
-    def __init__(self, ordered_triples, connecting_entities):
+    def __init__(self, ordered_triples):
         TriplePattern.__init__(self, ordered_triples)
-        self.connecting_entities = connecting_entities
 
 
 class TriplePair:
@@ -49,37 +49,68 @@ class TriplePairCollection:
 
 class TriplePatternFinder:
 
-    def __init__(self):
-        self.thing = 1
-
     # TODO: Add 'exact' arg for requiring that found pattern is of exact length as query (nothing continuing on either side)
-    def find_pattern_recursive(self, model, pattern: TriplePattern, candidate_chains=[]):
+    def find_pattern_recursive(self, model, pattern: TriplePattern, candidate_chains=[], exact_length=False,
+                               pattern_length=None):
         # break down pattern into component triples
         p = pattern.ordered_triples[0]
         found_triples = model.triples_by_ids(*p)
-        # print(found_triples)
 
         if len(found_triples) > 0:
             if len(candidate_chains) == 0:
-                candidate_chains = [[t] for t in found_triples]
+                # This is start of chain
+                # candidate_chains = [[t] for t in found_triples]
+                candidate_chains = []
+                for t in found_triples:
+                    if exact_length and len(pattern.ordered_triples) == 1:
+                        if self.triple_individuals_only_in_chain(model, [t], t):
+                            # stuff is gonna start on fire
+                            fire = "started"
+                            candidate_chains.append([t])
+                    else:
+                        candidate_chains.append([t])
+                if pattern_length is None:
+                    pattern_length = len(pattern.ordered_triples)
             else:
                 candidate_chains_local = []
                 for chain in candidate_chains:
                     for triple in found_triples:
                         #TODO: Make more selective (e.g. subject or object must be in previous triple)
-                        candidate_chains_local.append(chain + [triple])
+                        if exact_length and len(pattern.ordered_triples) == 1:
+                            # This is the last triple in chain. More checks needed. Triple connected to other triples?
+                            subject_triples = model.triples_involving_individual(triple[0])
+                            object_triples = model.triples_involving_individual(triple[2])
+                            # Er, ANY other triples with subject or object?
+                            # Any of these contain triples not in chain?
+                            drop_chain = False
+                            for t in subject_triples + object_triples:
+                                if t not in chain:
+                                    drop_chain = True
+                            if not drop_chain:
+                                candidate_chains_local.append(chain + [triple])
+                        else:
+                            candidate_chains_local.append(chain + [triple])
                 candidate_chains = candidate_chains_local
 
             if len(pattern.ordered_triples) > 1:
                 rest_of_pattern = TriplePattern(pattern.ordered_triples[1:len(pattern.ordered_triples)])
-                candidate_chains = self.find_pattern_recursive(model, rest_of_pattern, candidate_chains)
+                candidate_chains = self.find_pattern_recursive(model, rest_of_pattern, candidate_chains,
+                                                               exact_length=exact_length, pattern_length=pattern_length)
+            elif exact_length:
+                # On last triple of pattern. Throw out chains with len() != len(starting_pattern)
+                candidate_chains_local = []
+                for chain in candidate_chains:
+                    # And end triple of chain
+                    if len(chain) == pattern_length:
+                        candidate_chains_local.append(chain)
+                candidate_chains = candidate_chains_local
         else:
             candidate_chains = []
 
         return candidate_chains
 
     # def find_connected_pattern(self, model: AssocGoCamModel, pair_collection: TriplePairCollection, candidate_chains=[]):
-    def find_connected_pattern(self, model, pair_collection: TriplePairCollection):
+    def find_connected_pattern(self, model, pair_collection: TriplePairCollection, exact=False):
         # pair_collection is a TriplePairCollection w/ chain_collection of TriplePair[]. Each of these TriplePairs
         # consists of two triples, e.g. ("MF-term", relation_uri, "GP-class")
         # Returned output should be a TriplePairCollection w/ chain_collection of TriplePairs consisting of all-URI triples.
@@ -100,3 +131,19 @@ class TriplePatternFinder:
             else:
                 return None
         return connected_pair_collection
+
+    def triple_individuals_only_in_chain(self, model, chain, triple):
+        # This is the last triple in chain. More checks needed. Triple connected to other triples?
+        subject_triples = model.triples_involving_individual(triple[0])
+        object_triples = model.triples_involving_individual(triple[2])
+        # Er, ANY other triples with subject or object?
+        # Any of these contain triples not in chain?
+        drop_chain = False
+        for t in subject_triples + object_triples:
+            relation_curie = contract_uri_wrapper(t[1])[0]
+            # We basically just want to look at RO, BFO relations
+            if not (relation_curie.startswith("RO:") or relation_curie.startswith("BFO:")):
+                continue
+            if t not in chain:
+                return False
+        return True

@@ -202,12 +202,19 @@ class GoCamModel():
         axiom_id = self.add_axiom(self.writer.emit(subject_uri, relation_uri, object_uri))
         return axiom_id
 
-    def find_or_create_axiom(self, subject_id : str, relation_uri : URIRef, object_id : str, annoton=None):
-        found_triples = self.triples_by_ids(subject_id, relation_uri, object_id)
+    def find_or_create_axiom(self, subject_id : str, relation_uri : URIRef, object_id : str, annoton=None,
+                             exact_length=False):
+        # Maybe overkill but gonna try using find_pattern_recursive to find only one triple
+        pattern = TriplePattern([(subject_id, relation_uri, object_id)])
+        found_triples = TriplePatternFinder().find_pattern_recursive(self, pattern, exact_length=True)
+        # found_triples = self.triples_by_ids(subject_id, relation_uri, object_id)
         if len(found_triples) > 0:
-            subject_uri = found_triples[0][0]
-            object_uri = found_triples[0][2]
-            axiom_id = self.find_bnode(found_triples[0])
+            # Gonna be a list of "triple-chains", itself a list of triples, and each triple is sort like a 3-index list.
+            # So we just want the first triple from the first chain:
+            found_triple = found_triples[0][0]
+            subject_uri = found_triple[0]
+            object_uri = found_triple[2]
+            axiom_id = self.find_bnode(found_triple)
         else:
             # subject_uri = self.declare_individual(subject_id)
             subject_uri = subject_id if subject_id.__class__.__name__ == "URIRef" else self.declare_individual(subject_id)
@@ -337,6 +344,14 @@ class GoCamModel():
         if len(bnodes) > 0:
             return list(bnodes)[0]
 
+    def triples_involving_individual(self, ind_id, relation=None):
+        # "involving" meaning individual (URI) is either subject or object
+        graph = self.writer.writer.graph
+        found_triples = list(graph.triples((ind_id, relation, None)))
+        for t in graph.triples((None, relation, ind_id)):
+            if t not in found_triples:
+                found_triples.append(t)
+        return found_triples
 
 class AssocGoCamModel(GoCamModel):
 

@@ -96,6 +96,20 @@ class TestGoCamModel(unittest.TestCase):
         else:
             self.fail("Couldn't generate model for WB:WBGene00003167")
 
+    def test_extension_pipe_separation(self):
+        # See https://github.com/geneontology/gocamgen/issues/40
+        model = gen_model(gpad_file="resources/test/wb.gpad.WBGene00003167", test_gene="WB:WBGene00003167",
+                          filter_rule=WBFilterRule())
+
+        if model:
+            # Look for count of 'WB:WBGene00003167 contributes_to GO:0000977'
+            found_triples = model.triples_by_ids("WB:WBGene00003167", gocamgen.gocamgen.CONTRIBUTES_TO,
+                                                 "GO:0000977")
+            self.assertGreaterEqual(len(found_triples), 3,
+                                    "Less than 3 annotations for WB:WBGene00003167 contributes_to GO:0000977")
+        else:
+            self.fail("Couldn't generate model for WB:WBGene00003167")
+
     def test_no_dup_individuals(self):
         # See https://github.com/geneontology/gocamgen/issues/40
         model = gen_model(gpad_file="resources/test/mgi.gpa.MGI_2159711", test_gene="MGI:MGI:2159711",
@@ -114,12 +128,17 @@ class TestGoCamModel(unittest.TestCase):
         # F - MGI:MGI:107771 GO:0005096 'has_regulation_target(MGI:MGI:97846)|has_regulation_target(MGI:MGI:2180784)'
         # P - WB:WBGene00013591 GO:0042594 'causally_upstream_of(GO:0001934),has_regulation_target(WB:WBGene00008480)'
         # Which has_regulation_target bucket does this fall into? None so far (GO:0042594 is "response to starvation")
-        bucket = gocamgen.gocamgen.has_regulation_target_bucket("3852598")
+        # bucket = gocamgen.gocamgen.has_regulation_target_bucket(ont, "GO:0001934")
 
         model = gen_model(gpad_file="resources/test/wb.gpad.WBGene00013591", test_gene="WB:WBGene00013591",
                           filter_rule=WBFilterRule())
 
         self.assertEqual(1, 1)
+
+    def test_acts_upstream_of(self):
+        # TODO: Test for MGI:MGI:1206591
+        self.assertEqual(1, 1)
+
 
 if __name__ == '__main__':
     unittest.main()
