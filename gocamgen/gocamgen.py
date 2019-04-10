@@ -112,6 +112,7 @@ class Annoton():
         self.individuals = {}
 
 class GoCamModel():
+    # TODO: Not using anymore maybe get rid of?
     relations_dict = {
         "has_direct_input": "RO:0002400",
         "has input": "RO:0002233",
@@ -136,6 +137,8 @@ class GoCamModel():
         self.modeltitle = modeltitle
         self.classes = []
         self.individuals = {}   # Maintain entity-to-IRI dictionary. Prevents dup individuals but we may want dups?
+        # TODO: Refactor to make graph more prominent
+        # self.graph = rdflib.Graph()
         self.graph = networkx.MultiDiGraph()  # networkx graph of individuals and relations? Could this replace self.individuals? Will this conflict with self.writer.writer.graph?
         # Each node:
         ## node_id
@@ -175,6 +178,7 @@ class GoCamModel():
 
     def declare_individual(self, entity_id):
         entity = genid(base=self.writer.writer.base + '/')
+        # TODO: Make this add_to_graph
         self.writer.emit_type(entity, self.writer.uri(entity_id))
         self.writer.emit_type(entity, OWL.NamedIndividual)
         self.individuals[entity_id] = entity
@@ -202,6 +206,9 @@ class GoCamModel():
         axiom_id = self.add_axiom(self.writer.emit(subject_uri, relation_uri, object_uri))
         return axiom_id
 
+    # TODO: Explicitly type subject, object parameters. Are they Class ID URIs or instance URIs?
+    # def find_or_create_axiom_by_class_id_uri
+    # def find_or_create_axiom_by_instance_uri
     def find_or_create_axiom(self, subject_id : str, relation_uri : URIRef, object_id : str, annoton=None,
                              exact_length=False):
         # Maybe overkill but gonna try using find_pattern_recursive to find only one triple
@@ -373,6 +380,7 @@ class AssocGoCamModel(GoCamModel):
 
         for a in self.associations:
 
+            # TODO: Move away from annoton concept and more focus on model as graph
             annoton = Annoton(a["subject"]["id"], [a])
             term = a["object"]["id"]
 
