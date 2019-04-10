@@ -72,6 +72,7 @@ PROCESS_SINGLES_ONLY = [
     "has_input(CHEBI)",
     "has_direct_input(geneID)",
     "has_direct_input(CHEBI)",
+    "has_regulation_target(geneID)",
     "part_of(GO:P)"
 ]
 EXTENSION_RELATION_UNIVERSE = []  # Should this also be aspect-specific?
