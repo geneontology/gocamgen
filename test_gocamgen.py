@@ -130,7 +130,9 @@ class TestGoCamModel(unittest.TestCase):
         # Which has_regulation_target bucket does this fall into? None so far (GO:0042594 is "response to starvation")
         # bucket = gocamgen.gocamgen.has_regulation_target_bucket(ont, "GO:0001934")
 
-        model = gen_model(gpad_file="resources/test/wb.gpad.WBGene00013591", test_gene="WB:WBGene00013591",
+        # model = gen_model(gpad_file="resources/test/wb.gpad.WBGene00013591", test_gene="WB:WBGene00013591",
+        #                   filter_rule=WBFilterRule())
+        model = gen_model(gpad_file="resources/test/wb.gpad.WBGene00003167", test_gene="WB:WBGene00003167",
                           filter_rule=WBFilterRule())
 
         self.assertEqual(1, 1)
