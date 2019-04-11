@@ -436,7 +436,7 @@ class AssocGoCamModel(GoCamModel):
                                 # add_evidence_to_axiom(axiom_id, evidence)
                             elif ext_relation in HAS_REGULATION_TARGET_RELATIONS:
                                 buckets = has_regulation_target_bucket(self.ontology, term)
-                                print("{} {}: {}".format(annoton.enabled_by, term, buckets))
+                                # print("{} {}: {}".format(annoton.enabled_by, term, buckets))
                     else:
                         logger.debug("BAD: {}".format(ext_str))
         self.extensions_mapper.go_aspector.write_cache()
