@@ -499,7 +499,7 @@ if __name__ == "__main__":
                 pattern_outfile = args.pattern_outfile
             pattern_gpad = open(pattern_outfile, "w+")
             pattern_gpad_writer = GpadWriter(pattern_gpad)
-            WriterCollection.set_writer(pattern_gpad_writer, args.pattern)
+            writers.set_writer(pattern_gpad_writer, args.pattern)
     out_file = "all.tsv"
     if args.out_file:
         out_file = args.out_file
