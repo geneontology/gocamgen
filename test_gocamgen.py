@@ -11,19 +11,6 @@ from rdflib.term import URIRef
 # logger.setLevel(logging.DEBUG)
 
 
-def gen_model(gpad_file, test_gene, filter_rule):
-    extractor = AssocExtractor(gpad_file, filter_rule)
-    assocs_by_gene = extractor.group_assocs()
-
-    builder = GoCamBuilder()
-    if test_gene not in assocs_by_gene:
-        # print("ERROR: specific gene {} not found in filtered annotation list".format(test_gene))
-        return None
-    else:
-        model = builder.translate_to_model(test_gene, assocs_by_gene[test_gene])
-        return model
-
-
 class TestReferencePreference(unittest.TestCase):
 
     def test_ref_picker(self):
@@ -40,10 +27,25 @@ class TestReferencePreference(unittest.TestCase):
 
 
 class TestGoCamModel(unittest.TestCase):
+    BUILDER = GoCamBuilder()  # Takes a sec to init so only make once
+
+    def setUp(self):
+        pass
+
+    def gen_model(self, gpad_file, test_gene, filter_rule):
+        extractor = AssocExtractor(gpad_file, filter_rule)
+        assocs_by_gene = extractor.group_assocs()
+
+        if test_gene not in assocs_by_gene:
+            # print("ERROR: specific gene {} not found in filtered annotation list".format(test_gene))
+            return None
+        else:
+            model = TestGoCamModel.BUILDER.translate_to_model(test_gene, assocs_by_gene[test_gene])
+            return model
 
     def test_triple_finder(self):
         test_gene = "WB:WBGene00006498"
-        model = gen_model(gpad_file="resources/test/wb_6498.gpad", test_gene=test_gene,
+        model = self.gen_model(gpad_file="resources/test/wb_6498.gpad", test_gene=test_gene,
                           filter_rule=WBFilterRule())
         if model:
             # Get model.writer.graph whatever and check for loose evidence (not attached to axioms)
@@ -86,7 +88,7 @@ class TestGoCamModel(unittest.TestCase):
 
     def test_has_input(self):
         # See https://github.com/geneontology/gocamgen/issues/39#issuecomment-479988904 for background
-        model = gen_model(gpad_file="resources/test/wb.gpad.WBGene00003167", test_gene="WB:WBGene00003167",
+        model = self.gen_model(gpad_file="resources/test/wb.gpad.WBGene00003167", test_gene="WB:WBGene00003167",
                           filter_rule=WBFilterRule())
         if model:
             # Look for translation of 'GO:0000977 has_direct_input(WB:WBGene00036254)'
@@ -98,7 +100,7 @@ class TestGoCamModel(unittest.TestCase):
 
     def test_extension_pipe_separation(self):
         # See https://github.com/geneontology/gocamgen/issues/40
-        model = gen_model(gpad_file="resources/test/wb.gpad.WBGene00003167", test_gene="WB:WBGene00003167",
+        model = self.gen_model(gpad_file="resources/test/wb.gpad.WBGene00003167", test_gene="WB:WBGene00003167",
                           filter_rule=WBFilterRule())
 
         if model:
@@ -112,7 +114,7 @@ class TestGoCamModel(unittest.TestCase):
 
     def test_no_dup_individuals(self):
         # See https://github.com/geneontology/gocamgen/issues/40
-        model = gen_model(gpad_file="resources/test/mgi.gpa.MGI_2159711", test_gene="MGI:MGI:2159711",
+        model = self.gen_model(gpad_file="resources/test/mgi.gpa.MGI_2159711", test_gene="MGI:MGI:2159711",
                           filter_rule=MGIFilterRule())
 
         if model:
@@ -132,7 +134,7 @@ class TestGoCamModel(unittest.TestCase):
 
         # model = gen_model(gpad_file="resources/test/wb.gpad.WBGene00013591", test_gene="WB:WBGene00013591",
         #                   filter_rule=WBFilterRule())
-        model = gen_model(gpad_file="resources/test/wb.gpad.WBGene00003167", test_gene="WB:WBGene00003167",
+        model = self.gen_model(gpad_file="resources/test/wb.gpad.WBGene00003167", test_gene="WB:WBGene00003167",
                           filter_rule=WBFilterRule())
 
         self.assertEqual(1, 1)
