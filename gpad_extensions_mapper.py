@@ -9,7 +9,12 @@ import json
 import csv
 import os
 import argparse
+import logging
 from pathlib import Path
+
+# logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+logger.setLevel("INFO")
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-f", "--filename")
@@ -102,14 +107,14 @@ class CachedGoAspector(GoAspector):
         }
         aspect_file = Path(self.cache_filepath)
         if not aspect_file.is_file():
-            print("Creating aspect_lookup cache file: {}".format(self.cache_filepath))
+            logger.debug("Creating aspect_lookup cache file: {}".format(self.cache_filepath))
             self.write_cache()
         else:
             with open(cache_filepath) as af:
                 try:
                     self.aspect_lookup = json.load(af)
                 except json.decoder.JSONDecodeError:
-                    print("Corrupt aspect_lookup cache file: {} - Recreating...".format(self.cache_filepath))
+                    logger.warning("Corrupt aspect_lookup cache file: {} - Recreating...".format(self.cache_filepath))
 
     def write_cache(self):
         with open(self.cache_filepath, "w+") as af:
@@ -159,7 +164,7 @@ def get_relation_and_term(ext):
     try:
         ext_term = ext_parts[1].split(")")[0]  # i["filler"]
     except:
-        print(ext_parts)
+        logger.warning(ext_parts)
         # [' dppa4']
         # $ grep dppa4 resources/mgi.gpa.test.gpa
         # MGI	MGI:2141165	acts_upstream_of_or_within	GO:0010628	MGI:MGI:5913752|PMID:20699224	ECO:0000315	MGI:MGI:6108355		20190124	MGI	has_regulation_target(Dppa2, dppa4, piwil2),occurs_in(EMAPA:16036)
@@ -295,7 +300,7 @@ class ExtensionsMapper():
                     if go_aspect is not None:
                         ont = "GO:" + go_aspect
                     else:
-                        print("No aspect found for term: {}".format(ext_term))
+                        logger.warning("No aspect found for term: {}".format(ext_term))
                 else:
                     ont = term_prefix
                 ext_list.append("{}({})".format(relation, ont))
@@ -375,11 +380,11 @@ if __name__ == "__main__":
                     parts = l.split("\t")
                     # if parts[15] != "" and parts[6] in acceptable_evidence_codes:
                     data.append(parts)
-            print(len(data))
+            print("# of GPAD lines in file:", len(data))
             data = filter_has_extension(data)
-            print(len(data))
+            print("# of GPAD lines having extensions:", len(data))
             data = filter_evi_codes(data)
-            print("Total GPAD count:", len(data))
+            print("Total GPAD count after ECO code filters:", len(data))
 
             for g in data:
                 go_term = g[3]
@@ -406,14 +411,10 @@ if __name__ == "__main__":
                     ext_list = extensions_mapper.extensions_list(onto_ext['intersection_of'])
                     if not following_rules(ext_list, aspect):
                         ext_key = ",".join(ext_list)
-                        # if ext_key == "part_of(CL),part_of(EMAPA),part_of(EMAPA)":
-                        #     print(ext_list)
                         if ext_key not in ext_dict[aspect]:
                             ext_dict[aspect][ext_key] = [g]
                         else:
                             ext_dict[aspect][ext_key].append(g)
-                # Standardize key - ex:
-                #   ["part_of(GO:aspect),part_of(UBERON:)"]
 
             for aspect in ['F','P','C']:
                 max_count = 0
@@ -425,21 +426,6 @@ if __name__ == "__main__":
                         # print(max_count)
                         top_k = k
                         example_v = v[0]
-                # print("Aspect: ", aspect, " Count: ", max_count, " - ", format_extensions(top_k))
-                # print(example_v)
-
-            # with open(fname + ".tsv", 'w') as f:
-            #     writer = csv.writer(f, delimiter='\t')
-            #     for aspect in ['F', 'P', 'C']:
-            #         max_count = 0
-            #         top_k = None
-            #         example_v = None
-            #         for k, v in ext_dict[aspect].items():
-            #             writer.writerow([aspect, len(v), k])
-                    # print("Aspect: ", aspect, " Count: ", max_count, " - ", format_extensions(top_k))
-                    # print(example_v)
-            # all_dict = {**all_dict, **ext_dict}
-            print("ext_dict length:", len(ext_dict))
 
     def assigner_count(annots, assign):
         count = 0
@@ -522,7 +508,9 @@ if __name__ == "__main__":
                     row_to_write.append(a_count)
                 writer.writerow(row_to_write)
     for writer_name in writers.writers:
-        writers.writers[writer_name].gpad_file.close()
+        gpad_file = writers.writers[writer_name].gpad_file
+        print("Offending GPAD lines written to:", gpad_file.name)
+        gpad_file.close()
 
     wanted_gafs = []
     leftovers_out_file = "leftovers.gpad"
