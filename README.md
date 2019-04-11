@@ -6,6 +6,11 @@ Base repo for constructing GO-CAM model RDF
 pip install gocamgen
 ```
 
+## Tests
+```
+python3 test_gocamgen.py
+```
+
 ## Usage
 ```
 from gocamgen.gocamgen import GoCamModel
