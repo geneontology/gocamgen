@@ -99,13 +99,15 @@ class AssocFilter:
 class GoCamBuilder:
     def __init__(self):
         self.ext_mapper = ExtensionsMapper()
-        # self.ro_ontology = OntologyFactory().create("http://purl.obolibrary.org/obo/ro.owl")
-        self.go_ontology = OntologyFactory().create("go")
+        self.ro_ontology = OntologyFactory().create("http://purl.obolibrary.org/obo/ro.owl")
+        # Can't get logical_definitions w/ ont.create("go"), need to load ontology via PURL
+        self.go_ontology = OntologyFactory().create("http://purl.obolibrary.org/obo/go.owl")
 
     def translate_to_model(self, gene, assocs):
         model = AssocGoCamModel(gene, assocs)
         model.extensions_mapper = self.ext_mapper
         model.ontology = self.go_ontology
+        model.ro_ontology = self.ro_ontology
         model.translate()
 
         return model

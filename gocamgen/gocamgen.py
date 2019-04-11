@@ -366,17 +366,12 @@ class AssocGoCamModel(GoCamModel):
         GoCamModel.__init__(self, modeltitle, connection_relations)
         self.associations = assocs
         self.ontology = None
-        # self.ro_ontology = ro_ontology
+        self.ro_ontology = None
         self.extensions_mapper = None
         self.default_contributor = "http://orcid.org/0000-0002-6659-0416"
 
     def translate(self):
-        # input_relations = {
-        #     #TODO Create rule for deciding (MOD-specific?) whether to convert has_direct_input to has input
-        #     # "has_direct_input": "RO:0002400",
-        #     "has_direct_input": "RO:0002233",
-        #     "has input": "RO:0002233"
-        # }
+        # TODO Create rule for deciding (MOD-specific?) whether to convert has_direct_input to has input
 
         for a in self.associations:
 
@@ -407,6 +402,7 @@ class AssocGoCamModel(GoCamModel):
             else:
                 aspect = self.extensions_mapper.go_aspector.go_aspect(term)
 
+                axiom_ids = []
                 for uo in annotation_extensions['union_of']:
                     int_bits = []
                     for rel in uo["intersection_of"]:
@@ -426,19 +422,74 @@ class AssocGoCamModel(GoCamModel):
                                 target_gene_id = self.declare_individual(ext_target)
                                 annoton.individuals[ext_target] = target_gene_id
                                 axiom_id = self.find_or_create_axiom(anchor_uri, URIRef(expand_uri_wrapper(INPUT_RELATIONS[ext_relation])), target_gene_id)
-                                self.add_evidence(axiom_id, a["evidence"]["type"],
-                                                  a["evidence"]["has_supporting_reference"],
-                                                  contributors=contributors,
-                                                  date=annot_date,
-                                                  comment=source_line)
+                                axiom_ids.append(axiom_id)
+                                # self.add_evidence(axiom_id, a["evidence"]["type"],
+                                #                   a["evidence"]["has_supporting_reference"],
+                                #                   contributors=contributors,
+                                #                   date=annot_date,
+                                #                   comment=source_line)
                                 # Nice-to-have functions:
                                 # add_axiom(triple, evidence=[])
                                 # add_evidence_to_axiom(axiom_id, evidence)
                             elif ext_relation in HAS_REGULATION_TARGET_RELATIONS:
                                 buckets = has_regulation_target_bucket(self.ontology, term)
                                 # print("{} {}: {}".format(annoton.enabled_by, term, buckets))
+                                # logger.debug("{} {}: {}".format(annoton.enabled_by, term, buckets))
+                                if len(buckets) > 0:
+                                    bucket = buckets[0]
+                                    # Four buckets
+                                    # a. Express as [GP-A]<-enabled_by-[root MF]-regulates->[molecular function Z]-enabled_by->[GP-B]
+                                    #   Can get [molecular_function Z] by looking in ontology.logical_definitions(term)[n].restrictions
+                                    #   Z will be in restriction structure [('RO:0002211' or desc, Z)]
+                                    # b.
+                                    # c.
+                                    # d.
+                                    if bucket == "a":
+                                        # lds = self.ontology.logical_definitions(term)
+                                        # restrictions = []
+                                        # for ld in lds:
+                                        #     for r in ld.restrictions:
+                                        #         if r[0] in self.ro_ontology.descendants("RO:0002211", reflexive=True):
+                                        #             restrictions.append(r)
+                                        term_restrictions = self.get_restrictions(term)
+                                        if len(term_restrictions) > 0:
+                                            first_restriction = term_restrictions[0]
+                                            regulates_rel = first_restriction[0]
+                                            regulated_mf = first_restriction[1]
+                                            target_gene_id = self.declare_individual(ext_target)
+                                            axiom_id = self.find_or_create_axiom(regulated_mf, ENABLED_BY,
+                                                                                 target_gene_id)
+                                            axiom_ids.append(axiom_id)
+                                            regulated_mf_uri = list(self.writer.writer.graph.triples(
+                                                (axiom_id, OWL.annotatedSource, None)))[0][2]
+                                            axiom_id = self.find_or_create_axiom(anchor_uri, URIRef(
+                                                expand_uri_wrapper(regulates_rel)), regulated_mf_uri)
+                                            axiom_ids.append(axiom_id)
+                                            # TODO: Suppress/delete (GP-A)<-enabled_by-(root MF)-part_of->(term)
+                                            # Remove (anchor_uri, None, term)
+                                            # Is this anchor_uri always going to the root_mf?
+                                            # Will the term individual be used for anything else?
+                                            # Other comma-delimited extensions (e.g. happens_during, has_input)?
+                                    elif bucket == "b":
+                                        # GP-A<-enabled_by-[root MF]-part_of->[regulation of Z]-has_input->GP-B,-causally upstream of (positive/negative effect)->[root MF]-enabled_by->GP-B
+                                        term_restrictions = self.get_restrictions(term)
+                                        if len(term_restrictions) > 0:
+                                            first_restriction = term_restrictions[0]
+                                            regulates_rel = first_restriction[0]
+                                            # find 'Y subPropertyOf regulates_rel' in RO where Y will be `causally
+                                            # upstream of` relation
+                                            # Ex. GO:0045944 -> RO:0002213 -> RO:0002304
+                                            # edges(RO:0002213) only returns subProperties. Need superProperties
+                                            self.ro_ontology.graph.edges(regulates_rel)
+
                     else:
                         logger.debug("BAD: {}".format(ext_str))
+                for axiom_id in axiom_ids:
+                    self.add_evidence(axiom_id, a["evidence"]["type"],
+                                      a["evidence"]["has_supporting_reference"],
+                                      contributors=contributors,
+                                      date=annot_date,
+                                      comment=source_line)
         self.extensions_mapper.go_aspector.write_cache()
 
     def translate_primary_annotation(self, annotation, annoton):
@@ -536,6 +587,15 @@ class AssocGoCamModel(GoCamModel):
                               comment=source_line)
 
         return anchor_uri
+
+    def get_restrictions(self, term):
+        lds = self.ontology.logical_definitions(term)
+        restrictions = []
+        for ld in lds:
+            for r in ld.restrictions:
+                if r[0] in self.ro_ontology.descendants("RO:0002211", reflexive=True):
+                    restrictions.append(r)
+        return restrictions
 
 
 def get_annot_extensions(annot):
