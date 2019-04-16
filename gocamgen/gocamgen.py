@@ -371,7 +371,6 @@ class AssocGoCamModel(GoCamModel):
         self.default_contributor = "http://orcid.org/0000-0002-6659-0416"
 
     def translate(self):
-        # TODO Create rule for deciding (MOD-specific?) whether to convert has_direct_input to has input
 
         for a in self.associations:
 
@@ -445,17 +444,8 @@ class AssocGoCamModel(GoCamModel):
                                     # c.
                                     # d.
                                     if bucket == "a":
-                                        # lds = self.ontology.logical_definitions(term)
-                                        # restrictions = []
-                                        # for ld in lds:
-                                        #     for r in ld.restrictions:
-                                        #         if r[0] in self.ro_ontology.descendants("RO:0002211", reflexive=True):
-                                        #             restrictions.append(r)
-                                        term_restrictions = self.get_restrictions(term)
-                                        if len(term_restrictions) > 0:
-                                            first_restriction = term_restrictions[0]
-                                            regulates_rel = first_restriction[0]
-                                            regulated_mf = first_restriction[1]
+                                        regulates_rel, regulated_mf = self.get_rel_and_term_in_logical_definitions(term)
+                                        if regulates_rel and regulated_mf:
                                             target_gene_id = self.declare_individual(ext_target)
                                             axiom_id = self.find_or_create_axiom(regulated_mf, ENABLED_BY,
                                                                                  target_gene_id)
@@ -469,18 +459,33 @@ class AssocGoCamModel(GoCamModel):
                                             # Remove (anchor_uri, None, term)
                                             # Is this anchor_uri always going to the root_mf?
                                             # Will the term individual be used for anything else?
-                                            # Other comma-delimited extensions (e.g. happens_during, has_input)?
+                                            # Other comma-delimited extensions (e.g. happens_during, has_input) need this triple?
+                                        else:
+                                            logger.warning("Couldn't get regulates relation and/or regulated term from LD of: {}".format(term))
                                     elif bucket == "b":
-                                        # GP-A<-enabled_by-[root MF]-part_of->[regulation of Z]-has_input->GP-B,-causally upstream of (positive/negative effect)->[root MF]-enabled_by->GP-B
-                                        term_restrictions = self.get_restrictions(term)
-                                        if len(term_restrictions) > 0:
-                                            first_restriction = term_restrictions[0]
-                                            regulates_rel = first_restriction[0]
+                                        regulates_rel, regulated_term = self.get_rel_and_term_in_logical_definitions(term)
+                                        if regulates_rel:
                                             # find 'Y subPropertyOf regulates_rel' in RO where Y will be `causally
                                             # upstream of` relation
                                             # Ex. GO:0045944 -> RO:0002213 -> RO:0002304
                                             # edges(RO:0002213) only returns subProperties. Need superProperties
-                                            self.ro_ontology.graph.edges(regulates_rel)
+                                            # Gettin super properties
+                                            causally_upstream_relation = self.get_causally_upstream_relation(regulates_rel)
+                                            # print(causally_upstream_relation)
+                                            # GP-A<-enabled_by-[root MF]-part_of->[regulation of Z]-has_input->GP-B,-causally upstream of (positive/negative effect)->[root MF]-enabled_by->GP-B
+                                            # anchor_uri = root MF
+                                            target_gene_id = self.declare_individual(ext_target)
+                                            axiom_id = self.find_or_create_axiom(anchor_uri, URIRef(expand_uri_wrapper(INPUT_RELATIONS["has input"])), target_gene_id)
+                                            axiom_ids.append(axiom_id)
+                                            root_mf_b_uri = self.declare_individual(upt.molecular_function)
+                                            axiom_id = self.find_or_create_axiom(anchor_uri, URIRef(
+                                                expand_uri_wrapper(causally_upstream_relation)), root_mf_b_uri)
+                                            axiom_ids.append(axiom_id)
+                                            axiom_id = self.find_or_create_axiom(root_mf_b_uri, ENABLED_BY, target_gene_id)
+                                            axiom_ids.append(axiom_id)
+                                        else:
+                                            logger.warning("Couldn't get regulates relation from LD of: {}".format(term))
+
 
                     else:
                         logger.debug("BAD: {}".format(ext_str))
@@ -596,6 +601,31 @@ class AssocGoCamModel(GoCamModel):
                 if r[0] in self.ro_ontology.descendants("RO:0002211", reflexive=True):
                     restrictions.append(r)
         return restrictions
+
+    def get_rel_and_term_in_logical_definitions(self, term):
+        term_restrictions = self.get_restrictions(term)
+        if len(term_restrictions) > 0:
+            first_restriction = term_restrictions[0]
+            regulates_rel = first_restriction[0]
+            regulated_term = first_restriction[1]
+            return regulates_rel, regulated_term
+        else:
+            return None, None
+
+    def get_causally_upstream_relation(self, relation):
+        causally_upstream_relations = []
+        for p in self.ro_ontology.parents(relation,
+                                          relations=['subPropertyOf']):
+            # For GO:0045944 this is grabbing both RO:0002304 and RO:0002211
+            # Need specifically RO:0002304; how to specify?
+            #   regulates_rel will only ever be regulates, positively regulates, or
+            #   negatively regulates. If regulates in parents, grab other term
+            if not p == "RO:0002211":  # regulates
+                causally_upstream_relations.append(p)
+        if len(causally_upstream_relations) > 0:
+            return causally_upstream_relations[0]
+        else:
+            return None
 
 
 def get_annot_extensions(annot):
