@@ -1,0 +1,12 @@
+id: default
+label: Default filter rules
+description: "Default, non-MOD-specific filter rules"
+unwanted_evidence_codes:
+ - IEA
+ - IBA
+unwanted_evi_code_ref_combos:
+ - - IKR
+   - PMID:21873635
+required_attributes:
+unwanted_properties:
+mod_id:

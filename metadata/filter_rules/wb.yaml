@@ -1,0 +1,12 @@
+id: wb
+label: WormBase
+description: "Filter rules for WormBase"
+unwanted_evidence_codes:
+ - IEA
+ - IBA
+unwanted_evi_code_ref_combos:
+ - - IKR
+   - PMID:21873635
+required_attributes:
+unwanted_properties:
+mod_id:

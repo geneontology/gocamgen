@@ -1,40 +1,61 @@
 from ontobio.ecomap import EcoMap
 from abc import ABC, abstractmethod
+import yaml
+
 
 class FilterRule(ABC):
-    # Default filter - Remove IEA, IBA, as well as IKRs originating from PAINT.
-    def __init__(self, unwanted_evidence_codes=['IEA', 'IBA'],
-                 unwanted_evi_code_ref_combos=[('IKR', 'PMID:21873635')],
-                 required_attributes=None):
-        self.unwanted_evidence_codes = unwanted_evidence_codes
-        self.unwanted_evi_code_ref_combos = unwanted_evi_code_ref_combos
-        if required_attributes is None:
-            self.required_attributes = [{"provided_by": [self.mod_id()]}]
-        else:
-            self.required_attributes = required_attributes
+
+    def __init__(self):
+        self.id = None
+        self.unwanted_evidence_codes = []
+        self.unwanted_evi_code_ref_combos = []
+        self.required_attributes = []
         self.unwanted_properties = []
+        self.load_from_yaml()
+
+    def load_from_yaml(self):
+        with open(self.rule_filepath()) as yf:
+            rule_ds = yaml.safe_load(yf)
+
+        self.id = rule_ds["id"]
+
+        if rule_ds.get("unwanted_evidence_codes") is not None:
+            self.unwanted_evidence_codes = rule_ds["unwanted_evidence_codes"]
+
+        if rule_ds.get("unwanted_evi_code_ref_combos") is not None:
+            self.unwanted_evi_code_ref_combos = rule_ds["unwanted_evi_code_ref_combos"]
+
+        if rule_ds.get("required_attributes") is not None:
+            self.required_attributes = rule_ds["required_attributes"]
+        self.required_attributes.append({"provided_by": [self.mod_id()]})
+
+        if rule_ds.get("unwanted_properties") is not None:
+            self.unwanted_properties = rule_ds["unwanted_properties"]
 
     @abstractmethod
     def mod_id(self):
         pass
 
+    @abstractmethod
+    def rule_filepath(self):
+        return "metadata/filter_rules/default.yaml"
+
 
 class WBFilterRule(FilterRule):
-    # So far same as default FilterRule.
-
     def mod_id(self):
         return "WB"
 
+    def rule_filepath(self):
+        return "metadata/filter_rules/wb.yaml"
+
 
 class MGIFilterRule(FilterRule):
-    # Only provided_by=MGI lines are valid, also filtering out ISOs along with default FilterRule filters.
-    def __init__(self):
-        FilterRule.__init__(self)
-        self.unwanted_evidence_codes.append('ISO')
-        self.unwanted_properties = ["noctua-model-id"]
-
     def mod_id(self):
         return "MGI"
+
+    def rule_filepath(self):
+        return "metadata/filter_rules/mgi.yaml"
+
 
 mod_filter_map = {
     'WB': WBFilterRule,
