@@ -2,7 +2,8 @@ import gocamgen
 from gocamgen.gocamgen import expand_uri_wrapper, contract_uri_wrapper
 import unittest
 import logging
-from gen_models_by_gene import WBFilterRule, MGIFilterRule, AssocExtractor, GoCamBuilder
+from filter_rule import WBFilterRule, MGIFilterRule
+from gen_models_by_gene import AssocExtractor, GoCamBuilder
 from triple_pattern_finder import TriplePattern, TriplePatternFinder, TriplePair, TriplePairCollection
 from rdflib.term import URIRef
 
