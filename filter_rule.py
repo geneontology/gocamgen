@@ -67,10 +67,15 @@ class MGIFilterRule(FilterRule):
         return "metadata/filter_rules/mgi.yaml"
 
 
-mod_filter_map = {
-    'WB': WBFilterRule,
-    'MGI': MGIFilterRule
-}
+def get_filter_rule(mod_id):
+    mod_filter_map = {
+        'WB': WBFilterRule,
+        'MGI': MGIFilterRule
+    }
+    if mod_id in mod_filter_map:
+        return mod_filter_map[mod_id]()
+    else:
+        return DefaultFilterRule()
 
 
 class AssocFilter:

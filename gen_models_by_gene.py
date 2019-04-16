@@ -1,6 +1,6 @@
 from gocamgen.gocamgen import AssocGoCamModel
 from gpad_extensions_mapper import ExtensionsMapper
-from filter_rule import *
+from filter_rule import AssocFilter, FilterRule, get_filter_rule
 from ontobio.io.gpadparser import GpadParser
 from ontobio.ontol_factory import OntologyFactory
 # from ontobio.ecomap import EcoMap
@@ -127,11 +127,7 @@ def parse_header(gpad_file):
 if __name__ == "__main__":
     args = parser.parse_args()
 
-    if args.mod in mod_filter_map:
-        # TODO: make a factory function or something to assign based on class mod_id()
-        filter_rule = mod_filter_map[args.mod]()
-    else:
-        filter_rule = DefaultFilterRule()
+    filter_rule = get_filter_rule(args.mod)
 
     gpad_file = handle_gpad_file(args.gpad_file)
     relevant_header_data = parse_header(gpad_file)

@@ -1,10 +1,12 @@
 # from ontobio.io.gafparser import GafParser
 from ontobio.io.gpadparser import GpadParser
+from ontobio.io.assocparser import SplitLine
 from ontobio.ontol_factory import OntologyFactory
 # from prefixcommons import curie_util
 from ontobio.ecomap import EcoMap
 from ontobio.util.go_utils import GoAspector
 from ontobio.rdfgen.assoc_rdfgen import prefix_context
+from filter_rule import *
 import json
 import csv
 import os
@@ -24,6 +26,7 @@ parser.add_argument("-l", "--leftovers_out_file")
 parser.add_argument("-p", "--pattern")
 parser.add_argument("-q", "--pattern_outfile")
 parser.add_argument("-r", "--pattern_sourcefile")
+parser.add_argument("-m", "--mod")
 
 ontology_prefixes = []
 for k, v in prefix_context.items():
@@ -183,6 +186,19 @@ def filter_has_extension(annots):
     for a in annots:
         if a[10] != "":
             filtered.append(a)
+    return filtered
+
+def filter_rule_validate_lines(annots, assoc_filter):
+    filtered = []
+    # Converts split GPAD line into ontobio assoc obj for passing into standard FilterRule validation
+    gpad_parser = GpadParser()
+    for a in annots:
+        parse_result = gpad_parser.parse_line("\t".join(a))
+        if len(parse_result.associations) > 0:
+            # Right now, GpadParser only returns 0 or 1 associations
+            assoc = parse_result.associations[0]
+            if assoc_filter.validate_line(assoc):
+                filtered.append(a)
     return filtered
 
 def sum_combos(extension_counts, combo_list):
@@ -383,13 +399,16 @@ if __name__ == "__main__":
             print("# of GPAD lines in file:", len(data))
             data = filter_has_extension(data)
             print("# of GPAD lines having extensions:", len(data))
-            data = filter_evi_codes(data)
-            print("Total GPAD count after ECO code filters:", len(data))
+            filter_rule = get_filter_rule(args.mod)
+            assoc_filter = AssocFilter(filter_rule)
+            data = filter_rule_validate_lines(data, assoc_filter)
+            print("Total GPAD count after applying {}: {}".format(filter_rule.__class__.__name__, len(data)))
 
             for g in data:
                 go_term = g[3]
                 aspect = extensions_mapper.go_aspector.go_aspect(go_term)
-                ontobio_extensions = gpad_parser._parse_full_extension_expression(g[10])
+                split_line = SplitLine(line="\t".join(g), values=g, taxon="")  # Needed for ontobio error handling
+                ontobio_extensions = gpad_parser._parse_full_extension_expression(g[10], split_line)
                 ontobio_extensions = extensions_mapper.dedupe_extensions(ontobio_extensions)
                 # ontobio_pattern = {
                 #     'union_of': [
