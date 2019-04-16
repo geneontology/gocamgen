@@ -131,7 +131,7 @@ if __name__ == "__main__":
         # TODO: make a factory function or something to assign based on class mod_id()
         filter_rule = mod_filter_map[args.mod]()
     else:
-        filter_rule = FilterRule()
+        filter_rule = DefaultFilterRule()
 
     gpad_file = handle_gpad_file(args.gpad_file)
     relevant_header_data = parse_header(gpad_file)

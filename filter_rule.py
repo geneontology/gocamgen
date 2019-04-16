@@ -27,7 +27,8 @@ class FilterRule(ABC):
 
         if rule_ds.get("required_attributes") is not None:
             self.required_attributes = rule_ds["required_attributes"]
-        self.required_attributes.append({"provided_by": [self.mod_id()]})
+        if self.mod_id():
+            self.required_attributes.append({"provided_by": [self.mod_id()]})
 
         if rule_ds.get("unwanted_properties") is not None:
             self.unwanted_properties = rule_ds["unwanted_properties"]
@@ -37,6 +38,15 @@ class FilterRule(ABC):
         pass
 
     @abstractmethod
+    def rule_filepath(self):
+        pass
+
+
+class DefaultFilterRule(FilterRule):
+
+    def mod_id(self):
+        return None
+
     def rule_filepath(self):
         return "metadata/filter_rules/default.yaml"
 
