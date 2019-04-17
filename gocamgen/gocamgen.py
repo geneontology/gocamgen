@@ -16,6 +16,7 @@ import datetime
 import os.path as path
 import logging
 from triple_pattern_finder import TriplePattern, TriplePatternFinder, TriplePair, TriplePairCollection
+from rdflib_sparql_wrapper import RdflibSparqlWrapper
 
 # logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -138,17 +139,7 @@ class GoCamModel():
         self.classes = []
         self.individuals = {}   # Maintain entity-to-IRI dictionary. Prevents dup individuals but we may want dups?
         # TODO: Refactor to make graph more prominent
-        # self.graph = rdflib.Graph()
-        self.graph = networkx.MultiDiGraph()  # networkx graph of individuals and relations? Could this replace self.individuals? Will this conflict with self.writer.writer.graph?
-        # Each node:
-        ## node_id
-        ## class
-        ## attributes
-        # Each edge:
-        ## source
-        ## target
-        ## relation
-        ## other attributes?
+        self.graph = self.writer.writer.graph
         if connection_relations is None:
             self.connection_relations = GoCamModel.relations_dict
         else:
@@ -182,7 +173,6 @@ class GoCamModel():
         self.writer.emit_type(entity, self.writer.uri(entity_id))
         self.writer.emit_type(entity, OWL.NamedIndividual)
         self.individuals[entity_id] = entity
-        self.graph.add_node(entity, **{"label": entity_id})
         return entity
 
     def add_axiom(self, statement, evidence=None):
@@ -212,6 +202,7 @@ class GoCamModel():
     def find_or_create_axiom(self, subject_id : str, relation_uri : URIRef, object_id : str, annoton=None,
                              exact_length=False):
         # Maybe overkill but gonna try using find_pattern_recursive to find only one triple
+        # TODO: Replace the TriplePattern stuff w/ SPARQL but need 'exact_length' to work
         pattern = TriplePattern([(subject_id, relation_uri, object_id)])
         found_triples = TriplePatternFinder().find_pattern_recursive(self, pattern, exact_length=True)
         # found_triples = self.triples_by_ids(subject_id, relation_uri, object_id)
@@ -455,19 +446,14 @@ class AssocGoCamModel(GoCamModel):
                 annoton.individuals[annoton.enabled_by] = enabled_by_uri
                 axiom_ids.append(axiom_id)
             elif q == "involved_in":
-                # Try to find chain of two connected triples # TODO: Write function to find chain of any length
-                query_pair = TriplePair((upt.molecular_function, ENABLED_BY, annoton.enabled_by), (upt.molecular_function, PART_OF, term), connecting_entity=upt.molecular_function)
-                query_pair_collection = TriplePairCollection()
-                query_pair_collection.chain_collection.append(query_pair)
-                result_pair_collection = TriplePatternFinder().find_connected_pattern(self, query_pair_collection)
-                # From result_pair_collection, we need axiom_ids of both triples (self.find_bnode()) and anchor_uri (pair.connecting_entity_uri())
-                if result_pair_collection is not None:
-                    # Only need one
-                    triple_pair = result_pair_collection.chain_collection[0]
-                    # we need axiom_ids of both triples
-                    for tr in triple_pair.triples:
-                        axiom_ids.append(self.find_bnode(tr))
-                    anchor_uri = triple_pair.connecting_entity_uri(self)  # Root MF will be the connecting entity
+                # Try to find chain of two connected triples
+                rdflib_sparql_wrapper = RdflibSparqlWrapper()
+                involved_in_results = rdflib_sparql_wrapper.find_involved_in(self.graph, annoton.enabled_by, term)
+                if len(involved_in_results) > 0:
+                    result = list(involved_in_results)[0]
+                    anchor_uri = result["mf"]
+                    axiom_ids.append(self.find_bnode((result["mf"], ENABLED_BY, result["gp"])))
+                    axiom_ids.append(self.find_bnode((result["mf"], PART_OF, result["term"])))
                 else:
                     mf_root_uri = self.declare_individual(upt.molecular_function)
                     gp_uri = self.declare_individual(annoton.enabled_by)
@@ -475,7 +461,7 @@ class AssocGoCamModel(GoCamModel):
                     axiom_id = self.add_axiom(self.writer.emit(mf_root_uri, ENABLED_BY, gp_uri))
                     axiom_ids.append(axiom_id)
                     # Get enabled_by URI (owl:annotatedTarget) using axiom_id
-                    enabled_by_uri = list(self.writer.writer.graph.triples((axiom_id, OWL.annotatedTarget, None)))[0][2]
+                    enabled_by_uri = list(self.graph.triples((axiom_id, OWL.annotatedTarget, None)))[0][2]
                     annoton.individuals[annoton.enabled_by] = enabled_by_uri
                     anchor_uri = mf_root_uri
                     axiom_ids.append(self.add_axiom(self.writer.emit(mf_root_uri, PART_OF, term_uri)))
@@ -483,17 +469,13 @@ class AssocGoCamModel(GoCamModel):
                 # Look for existing GP <- enabled_by [root MF] -> causally_upstream_of BP
                 causally_relation = ENABLES_O_RELATION_LOOKUP[ACTS_UPSTREAM_OF_RELATIONS[q]]
                 causally_relation_uri = URIRef(expand_uri_wrapper(causally_relation))
-                query_pair = TriplePair((upt.molecular_function, ENABLED_BY, annoton.enabled_by),
-                                        (upt.molecular_function, causally_relation_uri, term),
-                                        connecting_entity=upt.molecular_function)
-                query_pair_collection = TriplePairCollection()
-                query_pair_collection.chain_collection.append(query_pair)
-                result_pair_collection = TriplePatternFinder().find_connected_pattern(self, query_pair_collection)
-                if result_pair_collection is not None:
-                    triple_pair = result_pair_collection.chain_collection[0]
-                    for tr in triple_pair.triples:
-                        axiom_ids.append(self.find_bnode(tr))
-                    anchor_uri = triple_pair.connecting_entity_uri(self)
+                rdflib_sparql_wrapper = RdflibSparqlWrapper()
+                acts_upstream_of_results = rdflib_sparql_wrapper.find_acts_upstream_of_translated(self.graph, annoton.enabled_by, causally_relation, term)
+                if len(acts_upstream_of_results) > 0:
+                    result = list(acts_upstream_of_results)[0]
+                    anchor_uri = result["mf"]
+                    axiom_ids.append(self.find_bnode((result["mf"], ENABLED_BY, result["gp"])))
+                    axiom_ids.append(self.find_bnode((result["mf"], causally_relation_uri, result["term"])))
                 else:
                     # If no chain found create one.
                     mf_root_uri = self.declare_individual(upt.molecular_function)
@@ -511,9 +493,9 @@ class AssocGoCamModel(GoCamModel):
                 # TODO: should check that existing axiom/triple isn't connected to anything else; length matches exactly
                 axiom_id = self.find_or_create_axiom(annoton.enabled_by, relation_uri, term)
                 # Get enabled_by URI (owl:annotatedSource) using axiom_id
-                enabled_by_uri = list(self.writer.writer.graph.triples((axiom_id, OWL.annotatedSource, None)))[0][2]
+                enabled_by_uri = list(self.graph.triples((axiom_id, OWL.annotatedSource, None)))[0][2]
                 annoton.individuals[annoton.enabled_by] = enabled_by_uri
-                term_uri = list(self.writer.writer.graph.triples((axiom_id, OWL.annotatedTarget, None)))[0][2]
+                term_uri = list(self.graph.triples((axiom_id, OWL.annotatedTarget, None)))[0][2]
                 # anchor_uri = enabled_by_uri
                 anchor_uri = term_uri
                 axiom_ids.append(axiom_id)

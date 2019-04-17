@@ -1,11 +1,12 @@
 import gocamgen
-from gocamgen.gocamgen import expand_uri_wrapper, contract_uri_wrapper
+from gocamgen.gocamgen import expand_uri_wrapper, contract_uri_wrapper, ACTS_UPSTREAM_OF_RELATIONS, ENABLES_O_RELATION_LOOKUP
 import unittest
 import logging
 from filter_rule import WBFilterRule, MGIFilterRule
 from gen_models_by_gene import AssocExtractor, GoCamBuilder
 from triple_pattern_finder import TriplePattern, TriplePatternFinder, TriplePair, TriplePairCollection
 from rdflib.term import URIRef
+from rdflib_sparql_wrapper import RdflibSparqlWrapper
 
 # logging.basicConfig(level=logging.DEBUG)
 # logger = logging.getLogger("gen_models_by_gene")
@@ -126,6 +127,21 @@ class TestGoCamModel(unittest.TestCase):
         else:
             self.fail("Couldn't generate model for MGI:MGI:2159711")
 
+        # Case of multiple experimental annotations to same GP and term.
+        model = self.gen_model(gpad_file="resources/test/mgi.gpa.MGI_98956", test_gene="MGI:MGI:98956",
+                               filter_rule=MGIFilterRule())
+
+        if model:
+            # This example has like 10-20 exp assertions for MGI:MGI:98956 to GO:0060070
+            sparql_wrapper = RdflibSparqlWrapper()
+            gp = "MGI:MGI:98956"
+            term = "GO:0060070"
+            qres = sparql_wrapper.find_involved_in(model.graph, gp, term)
+            self.assertEqual(len(qres), 1)
+        else:
+            self.fail("Couldn't generate model for MGI:MGI:98956")
+
+
     def test_has_regulation_target(self):
         # Examples:
         # F - MGI:MGI:107771 GO:0005096 'has_regulation_target(MGI:MGI:97846)|has_regulation_target(MGI:MGI:2180784)'
@@ -143,6 +159,36 @@ class TestGoCamModel(unittest.TestCase):
     def test_acts_upstream_of(self):
         # TODO: Test for MGI:MGI:1206591
         self.assertEqual(1, 1)
+
+        # what about MGI:MGI:1914305?
+        # resources/test/mgi.gpa.MGI_1914305
+        model = self.gen_model(gpad_file="resources/test/mgi.gpa.MGI_1914305", test_gene="MGI:MGI:1914305",
+                               filter_rule=MGIFilterRule())
+
+        if model:
+            sparql_wrapper = RdflibSparqlWrapper()
+            gp = "MGI:MGI:1914305"
+            term = "GO:0007416"
+            causally_relation = ENABLES_O_RELATION_LOOKUP[ACTS_UPSTREAM_OF_RELATIONS["acts_upstream_of_or_within"]]
+            qres = sparql_wrapper.find_acts_upstream_of_translated(model.graph, gp, causally_relation, term)
+            self.assertEqual(len(qres), 1)
+        else:
+            self.fail("Couldn't generate model for MGI:MGI:1914305")
+
+    def test_sparql(self):
+        # Just gonna see what we can sparql out of this guy.
+        model = self.gen_model(gpad_file="resources/test/wb.gpad.WBGene00003167", test_gene="WB:WBGene00003167",
+                               filter_rule=WBFilterRule())
+
+        if model:
+            sparql_wrapper = RdflibSparqlWrapper()
+            gp = "WB:WBGene00003167"
+            term = "GO:0007638"
+            qres = sparql_wrapper.find_involved_in(model.graph, gp, term)
+
+            self.assertEqual(len(qres), 1)
+        else:
+            self.fail("Couldn't generate model for WB:WBGene00003167")
 
 
 if __name__ == '__main__':
