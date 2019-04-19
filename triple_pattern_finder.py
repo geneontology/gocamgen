@@ -137,7 +137,6 @@ class TriplePatternFinder:
         object_triples = model.triples_involving_individual(triple[2])
         # Er, ANY other triples with subject or object?
         # Any of these contain triples not in chain?
-        drop_chain = False
         for t in subject_triples + object_triples:
             relation_curie = contract_uri_wrapper(t[1])[0]
             # We basically just want to look at RO, BFO relations

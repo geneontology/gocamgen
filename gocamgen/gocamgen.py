@@ -17,6 +17,7 @@ import os.path as path
 import logging
 from triple_pattern_finder import TriplePattern, TriplePatternFinder, TriplePair, TriplePairCollection
 from rdflib_sparql_wrapper import RdflibSparqlWrapper
+from gocamgen.subgraphs import AnnotationSubgraph
 
 # logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -111,6 +112,37 @@ class Annoton():
         self.annotations = assocs
         self.connections = connections
         self.individuals = {}
+
+
+class GoCamEvidence:
+    DEFAULT_CONTRIBUTOR = "http://orcid.org/0000-0002-6659-0416"
+
+    def __init__(self, code, references, contributors=[], date="", comment=""):
+        self.evidence_code = code
+        self.references = references
+        self.date = date
+        self.contributors = contributors
+        self.comment = comment
+        self.id = None
+
+    @staticmethod
+    def create_from_annotation(annot):
+        evidence_code = annot["evidence"]["type"]
+        references = annot["evidence"]["has_supporting_reference"]
+        annot_date = "{0:%Y-%m-%d}".format(datetime.datetime.strptime(annot["date"], "%Y%m%d"))
+        source_line = annot["source_line"].rstrip().replace("\t", " ")
+        # contributors = handle_annot_properties() # Need annot_properties to be parsed w/ GpadParser first
+        contributors = []
+        if "annotation_properties" in annot and "contributor" in annot["annotation_properties"]:
+            contributors = annot["annotation_properties"]["contributor"]
+        if len(contributors) == 0:
+            contributors = [GoCamEvidence.DEFAULT_CONTRIBUTOR]
+
+        return GoCamEvidence(evidence_code, references,
+                           contributors=contributors,
+                           date=annot_date,
+                           comment=source_line)
+
 
 class GoCamModel():
     # TODO: Not using anymore maybe get rid of?
@@ -224,19 +256,17 @@ class GoCamModel():
             annoton.individuals[object_id] = object_uri
         return axiom_id
 
-    def add_evidence(self, axiom, evidence_code, references, contributors=[], date="", comment=""):
-        ev = GoCamEvidence(evidence_code, references, contributors=contributors, date=date, comment=comment)
+    def add_evidence(self, axiom, evidence: GoCamEvidence):
         # Try finding existing evidence object containing same type and references
         # ev_id = self.writer.find_or_create_evidence_id(ev)
-        ev_id = self.writer.create_evidence(ev)
+        ev_id = self.writer.create_evidence(evidence)
         self.writer.emit(axiom, URIRef("http://geneontology.org/lego/evidence"), ev_id)
         ### Emit ev fields to axiom here TODO: Couple evidence and axiom emitting together
-        self.writer.emit(axiom, DC.date, Literal(ev.date))
-        self.writer.emit(axiom, RDFS.comment, Literal(ev.comment))
+        self.writer.emit(axiom, DC.date, Literal(evidence.date))
+        self.writer.emit(axiom, RDFS.comment, Literal(evidence.comment))
         # self.writer.emit(axiom, RDFS.comment, Literal(""))
-        for c in ev.contributors:
+        for c in evidence.contributors:
             self.writer.emit(axiom, DC.contributor, Literal(c))
-
 
     def add_connection(self, gene_connection, source_annoton):
         # Switching from reusing existing activity node from annoton to creating new one for each connection - Maybe SPARQL first to check if annoton activity already used for connection?
@@ -389,6 +419,7 @@ class AssocGoCamModel(GoCamModel):
             # Translate extension - maybe add function argument for custom translations?
             if len(annotation_extensions) == 0:
                 self.translate_primary_annotation(a, annoton)
+
             else:
                 aspect = self.extensions_mapper.go_aspector.go_aspect(term)
 
@@ -400,6 +431,14 @@ class AssocGoCamModel(GoCamModel):
                     ext_str = ",".join(int_bits)
 
                     anchor_uri = self.translate_primary_annotation(a, annoton)
+                    # Need to make translate_primary_annotation() flexible enough to prevent reusing axioms if
+                    # extensions are present. Though axioms can be reused if entire annotation+extension assertion
+                    # matches. So does entire assertion graph need to be computed before this method is called?
+                    # Ex of multi comma-delimited extensions:
+                    # WB:WBGene00001173 GO:0051343 ['has_regulation_target', 'occurs_in']
+                    # WB:WBGene00001173 GO:0051343 ['has_regulation_target']
+                    # Can the 2nd annot reuse 1st's full has_regulation_target chain? Assuming NO
+
                     intersection_extensions = self.extensions_mapper.dedupe_extensions(uo['intersection_of'])
                     is_cool = self.extensions_mapper.annot_following_rules(intersection_extensions, aspect)
                     if is_cool:
@@ -413,30 +452,15 @@ class AssocGoCamModel(GoCamModel):
                                 annoton.individuals[ext_target] = target_gene_id
                                 axiom_id = self.find_or_create_axiom(anchor_uri, URIRef(expand_uri_wrapper(INPUT_RELATIONS[ext_relation])), target_gene_id)
                                 axiom_ids.append(axiom_id)
-                                # self.add_evidence(axiom_id, a["evidence"]["type"],
-                                #                   a["evidence"]["has_supporting_reference"],
-                                #                   contributors=contributors,
-                                #                   date=annot_date,
-                                #                   comment=source_line)
-                                # Nice-to-have functions:
-                                # add_axiom(triple, evidence=[])
-                                # add_evidence_to_axiom(axiom_id, evidence)
                             elif ext_relation in HAS_REGULATION_TARGET_RELATIONS:
                                 buckets = has_regulation_target_bucket(self.ontology, term)
-                                # print("{} {}: {}".format(annoton.enabled_by, term, buckets))
-                                # logger.debug("{} {}: {}".format(annoton.enabled_by, term, buckets))
                                 if len(buckets) > 0:
-                                    bucket = buckets[0]
+                                    bucket = buckets[0]  # Or express all buckets?
                                     # Four buckets
-                                    # a. Express as [GP-A]<-enabled_by-[root MF]-regulates->[molecular function Z]-enabled_by->[GP-B]
-                                    #   Can get [molecular_function Z] by looking in ontology.logical_definitions(term)[n].restrictions
-                                    #   Z will be in restriction structure [('RO:0002211' or desc, Z)]
-                                    # b.
-                                    # c.
-                                    # d.
                                     if bucket == "a":
                                         regulates_rel, regulated_mf = self.get_rel_and_term_in_logical_definitions(term)
                                         if regulates_rel and regulated_mf:
+                                            # [GP-A]<-enabled_by-[root MF]-regulates->[molecular function Z]-enabled_by->[GP-B]
                                             target_gene_id = self.declare_individual(ext_target)
                                             axiom_id = self.find_or_create_axiom(regulated_mf, ENABLED_BY,
                                                                                  target_gene_id)
@@ -446,10 +470,15 @@ class AssocGoCamModel(GoCamModel):
                                             axiom_id = self.find_or_create_axiom(anchor_uri, URIRef(
                                                 expand_uri_wrapper(regulates_rel)), regulated_mf_uri)
                                             axiom_ids.append(axiom_id)
-                                            # TODO: Suppress/delete (GP-A)<-enabled_by-(root MF)-part_of->(term)
+                                            # TODO: Suppress/delete (GP-A)<-enabled_by-(root MF)-part_of->(term) aka involved_in_translated
                                             # Remove (anchor_uri, None, term)
                                             # Is this anchor_uri always going to the root_mf?
                                             # Will the term individual be used for anything else?
+                                            #   Other comma-delimited extensions on same annotation?
+                                            # has_during? occurs_in?
+                                            # WB:WBGene00001173 GO:0051343 ['has_regulation_target', 'occurs_in'] ['a']
+                                            # WB:WBGene00006652 GO:0045944 ['has_regulation_target', 'occurs_in'] ['b']
+                                            # WB:WBGene00003639 GO:0036003 ['happens_during', 'has_regulation_target'] ['b']
                                             # Other comma-delimited extensions (e.g. happens_during, has_input) need this triple?
                                         else:
                                             logger.warning("Couldn't get regulates relation and/or regulated term from LD of: {}".format(term))
@@ -465,6 +494,7 @@ class AssocGoCamModel(GoCamModel):
                                             # print(causally_upstream_relation)
                                             # GP-A<-enabled_by-[root MF]-part_of->[regulation of Z]-has_input->GP-B,-causally upstream of (positive/negative effect)->[root MF]-enabled_by->GP-B
                                             # anchor_uri = root MF
+                                            # First, try SPARQLing full pattern
                                             target_gene_id = self.declare_individual(ext_target)
                                             axiom_id = self.find_or_create_axiom(anchor_uri, URIRef(expand_uri_wrapper(INPUT_RELATIONS["has input"])), target_gene_id)
                                             axiom_ids.append(axiom_id)
@@ -476,16 +506,21 @@ class AssocGoCamModel(GoCamModel):
                                             axiom_ids.append(axiom_id)
                                         else:
                                             logger.warning("Couldn't get regulates relation from LD of: {}".format(term))
+                                    elif bucket == "c":
+                                        # WB:WBGene00001574 GO:1903363 ['happens_during', 'has_regulation_target'] ['c', 'd']
+                                        do_stuff = 1
+                                    elif bucket == "d":
+                                        # WB:WBGene00002335 GO:1902685 ['has_regulation_target', 'occurs_in'] ['d']
+                                        do_stuff = 1
 
 
                     else:
                         logger.debug("BAD: {}".format(ext_str))
+
+                # Glom the evidence onto these axioms
+                evidence = GoCamEvidence.create_from_annotation(a)
                 for axiom_id in axiom_ids:
-                    self.add_evidence(axiom_id, a["evidence"]["type"],
-                                      a["evidence"]["has_supporting_reference"],
-                                      contributors=contributors,
-                                      date=annot_date,
-                                      comment=source_line)
+                    self.add_evidence(axiom_id, evidence)
         self.extensions_mapper.go_aspector.write_cache()
 
     def translate_primary_annotation(self, annotation, annoton):
@@ -493,9 +528,13 @@ class AssocGoCamModel(GoCamModel):
 
         anchor_uri = None
         axiom_ids = []
+        annot_subgraph = AnnotationSubgraph(annotation)
         for q in annotation["qualifiers"]:
             if q == "enables":
                 axiom_id = self.find_or_create_axiom(term, ENABLED_BY, annoton.enabled_by, annoton=annoton)
+                # annot_subgraph.add_node(term)  # Should this node be an instance of term?
+                # annot_subgraph.add_node(annoton.enabled_by)  # Should this node be an instance of GP?
+                annot_subgraph.add_edge(term, "RO:0002333", annoton.enabled_by)
                 # Get enabled_by URI (owl:annotatedTarget) using axiom_id (a hack because I'm still using Annoton object with gene_connections)
                 enabled_by_uri = list(self.writer.writer.graph.triples((axiom_id, OWL.annotatedTarget, None)))[0][2]
                 anchor_uri = list(self.writer.writer.graph.triples((axiom_id, OWL.annotatedSource, None)))[0][2]
@@ -504,7 +543,12 @@ class AssocGoCamModel(GoCamModel):
             elif q == "involved_in":
                 # Try to find chain of two connected triples
                 rdflib_sparql_wrapper = RdflibSparqlWrapper()
-                involved_in_results = rdflib_sparql_wrapper.find_involved_in(self.graph, annoton.enabled_by, term)
+                involved_in_results = rdflib_sparql_wrapper.find_involved_in_translated(self.graph, annoton.enabled_by, term)
+                # annot_subgraph.add_node("GO:0003674")
+                # annot_subgraph.add_node(annoton.enabled_by)
+                # annot_subgraph.add_node(term)
+                annot_subgraph.add_edge(upt.molecular_function, "RO:0002333", annoton.enabled_by)
+                annot_subgraph.add_edge(upt.molecular_function, "BFO:0000050", term)
                 if len(involved_in_results) > 0:
                     result = list(involved_in_results)[0]
                     anchor_uri = result["mf"]
@@ -525,6 +569,8 @@ class AssocGoCamModel(GoCamModel):
                 # Look for existing GP <- enabled_by [root MF] -> causally_upstream_of BP
                 causally_relation = ENABLES_O_RELATION_LOOKUP[ACTS_UPSTREAM_OF_RELATIONS[q]]
                 causally_relation_uri = URIRef(expand_uri_wrapper(causally_relation))
+                annot_subgraph.add_edge(upt.molecular_function, "RO:0002333", annoton.enabled_by)
+                annot_subgraph.add_edge(upt.molecular_function, causally_relation, term)
                 rdflib_sparql_wrapper = RdflibSparqlWrapper()
                 acts_upstream_of_results = rdflib_sparql_wrapper.find_acts_upstream_of_translated(self.graph, annoton.enabled_by, causally_relation, term)
                 if len(acts_upstream_of_results) > 0:
@@ -547,6 +593,7 @@ class AssocGoCamModel(GoCamModel):
             else:
                 relation_uri = URIRef(expand_uri_wrapper(self.relations_dict[q]))
                 # TODO: should check that existing axiom/triple isn't connected to anything else; length matches exactly
+                annot_subgraph.add_edge(annoton.enabled_by, self.relations_dict[q], term)
                 axiom_id = self.find_or_create_axiom(annoton.enabled_by, relation_uri, term)
                 # Get enabled_by URI (owl:annotatedSource) using axiom_id
                 enabled_by_uri = list(self.graph.triples((axiom_id, OWL.annotatedSource, None)))[0][2]
@@ -557,22 +604,11 @@ class AssocGoCamModel(GoCamModel):
                 axiom_ids.append(axiom_id)
 
         # Add evidence tied to axiom_ids
-        annot_date = "{0:%Y-%m-%d}".format(datetime.datetime.strptime(annotation["date"], "%Y%m%d"))
-        source_line = annotation["source_line"].rstrip().replace("\t", " ")
-        # contributors = handle_annot_properties() # Need annot_properties to be parsed w/ GpadParser first
-        contributors = []
-        if "annotation_properties" in annotation and "contributor" in annotation["annotation_properties"]:
-            contributors = annotation["annotation_properties"]["contributor"]
-        if len(contributors) == 0:
-            # contributors = [""]
-            contributors = [self.default_contributor]
+        evidence = GoCamEvidence.create_from_annotation(annotation)
         for a_id in axiom_ids:
-            self.add_evidence(a_id, annotation["evidence"]["type"],
-                              annotation["evidence"]["has_supporting_reference"],
-                              contributors=contributors,
-                              date=annot_date,
-                              comment=source_line)
+            self.add_evidence(a_id, evidence)
 
+        # print(annot_subgraph.edges(data=True))
         return anchor_uri
 
     def get_restrictions(self, term):
@@ -618,7 +654,7 @@ def get_annot_extensions(annot):
     return {}
 
 
-class ReferencePreference():
+class ReferencePreference:
     def __init__(self):
         # List order in python should be persistent
         self.order_of_prefix_preference = [
@@ -632,16 +668,6 @@ class ReferencePreference():
             for ref in references:
                 if ref.startswith(pfx):
                     return ref
-
-
-class GoCamEvidence():
-    def __init__(self, code, references, contributors=[], date="", comment=""):
-        self.evidence_code = code
-        self.references = references
-        self.date = date
-        self.contributors = contributors
-        self.comment = comment
-        self.id = None
 
 
 class CamTurtleRdfWriter(TurtleRdfWriter):

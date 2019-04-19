@@ -7,6 +7,7 @@ from gen_models_by_gene import AssocExtractor, GoCamBuilder
 from triple_pattern_finder import TriplePattern, TriplePatternFinder, TriplePair, TriplePairCollection
 from rdflib.term import URIRef
 from rdflib_sparql_wrapper import RdflibSparqlWrapper
+from gocamgen.subgraphs import AnnotationSubgraph
 
 # logging.basicConfig(level=logging.DEBUG)
 # logger = logging.getLogger("gen_models_by_gene")
@@ -136,7 +137,7 @@ class TestGoCamModel(unittest.TestCase):
             sparql_wrapper = RdflibSparqlWrapper()
             gp = "MGI:MGI:98956"
             term = "GO:0060070"
-            qres = sparql_wrapper.find_involved_in(model.graph, gp, term)
+            qres = sparql_wrapper.find_involved_in_translated(model.graph, gp, term)
             self.assertEqual(len(qres), 1)
         else:
             self.fail("Couldn't generate model for MGI:MGI:98956")
@@ -184,9 +185,40 @@ class TestGoCamModel(unittest.TestCase):
             sparql_wrapper = RdflibSparqlWrapper()
             gp = "WB:WBGene00003167"
             term = "GO:0007638"
-            qres = sparql_wrapper.find_involved_in(model.graph, gp, term)
+            qres = sparql_wrapper.find_involved_in_translated(model.graph, gp, term)
 
             self.assertEqual(len(qres), 1)
+        else:
+            self.fail("Couldn't generate model for WB:WBGene00003167")
+
+    def test_graph_to_sparql(self):
+        model = self.gen_model(gpad_file="resources/test/wb.gpad.WBGene00003167", test_gene="WB:WBGene00003167",
+                               filter_rule=WBFilterRule())
+
+        # Write this:
+        # GO:0003674-1 enabled_by (RO:0002333) WB:WBGene00003167-1
+        # GO:0003674-1 part_of (BFO:0000050) GO:0045944-1
+        # GO:0003674-1 has_input (RO:0002233) WB:WBGene00003167-2
+        # GO:0003674-2 enabled_by (RO:0002333) WB:WBGene00003167-2
+        # GO:0003674-1 causally upstream of, positive effect (RO:0002304) GO:0003674-2
+        if model:
+            g = AnnotationSubgraph({"source_line": "fake annotation"})
+            mf_a = g.add_instance_of_class("GO:0003674")
+            gp_a = g.add_instance_of_class("WB:WBGene00003167")
+            bp_a = g.add_instance_of_class("GO:0045944")
+            gp_b = g.add_instance_of_class("WB:WBGene00003167")
+            mf_b = g.add_instance_of_class("GO:0003674")
+
+            g.add_edge(mf_a, "RO:0002333", gp_a)
+            g.add_edge(mf_a, "BFO:0000050", bp_a)
+            g.add_edge(mf_a, "RO:0002233", gp_b)
+            g.add_edge(mf_b, "RO:0002333", gp_b)
+            g.add_edge(mf_a, "RO:0002304", mf_b)
+
+            # g.print_matches_in_model(model)
+            results = g.find_matches_in_model(model)
+
+            self.assertEqual(len(results), 1)
         else:
             self.fail("Couldn't generate model for WB:WBGene00003167")
 

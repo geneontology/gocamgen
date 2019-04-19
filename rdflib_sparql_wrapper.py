@@ -5,12 +5,12 @@ from ontobio.rdfgen.assoc_rdfgen import prefix_context
 
 class RdflibSparqlWrapper:
 
-    def run_query(self, graph : Graph, query):
+    def run_query(self, graph: Graph, query):
         response = graph.query(prepareQuery(query, initNs=prefix_context))
 
         return response
 
-    def find_involved_in(self, graph : Graph, gp, term):
+    def find_involved_in_translated(self, graph: Graph, gp, term):
         # Recreate this query
         # query_pair = TriplePair((upt.molecular_function, ENABLED_BY, annoton.enabled_by),
         #                         (upt.molecular_function, PART_OF, term), connecting_entity=upt.molecular_function)
