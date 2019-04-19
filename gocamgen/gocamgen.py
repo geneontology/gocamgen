@@ -403,23 +403,16 @@ class AssocGoCamModel(GoCamModel):
             # since relation is explicitly stated in GPAD
             # Standardize aspect using GPAD relations?
 
-            # TODO stuff annot_date and contributors into annot data structure for reuse
             # Add evidence tied to axiom_ids
-            annot_date = "{0:%Y-%m-%d}".format(datetime.datetime.strptime(a["date"], "%Y%m%d"))
-            source_line = a["source_line"].rstrip().replace("\t", " ")
-            # contributors = handle_annot_properties() # Need annot_properties to be parsed w/ GpadParser first
-            contributors = []
-            if "annotation_properties" in a and "contributor" in a["annotation_properties"]:
-                contributors = a["annotation_properties"]["contributor"]
-            if len(contributors) == 0:
-                contributors = [self.default_contributor]
+            evidence = GoCamEvidence.create_from_annotation(a)
 
             annotation_extensions = get_annot_extensions(a)
 
             # Translate extension - maybe add function argument for custom translations?
             if len(annotation_extensions) == 0:
-                self.translate_primary_annotation(a, annoton)
-
+                anchor_uri, annot_subgraph = self.translate_primary_annotation(a, annoton)
+                # TODO: This is where we write subgraph to model
+                annot_subgraph.write_to_model(self, evidence)
             else:
                 aspect = self.extensions_mapper.go_aspector.go_aspect(term)
 
@@ -430,7 +423,7 @@ class AssocGoCamModel(GoCamModel):
                         int_bits.append("{}({})".format(rel["property"], rel["filler"]))
                     ext_str = ",".join(int_bits)
 
-                    anchor_uri = self.translate_primary_annotation(a, annoton)
+                    anchor_uri, annot_subgraph = self.translate_primary_annotation(a, annoton)
                     # Need to make translate_primary_annotation() flexible enough to prevent reusing axioms if
                     # extensions are present. Though axioms can be reused if entire annotation+extension assertion
                     # matches. So does entire assertion graph need to be computed before this method is called?
@@ -447,6 +440,12 @@ class AssocGoCamModel(GoCamModel):
                             ext_relation = rel["property"]
                             ext_target = rel["filler"]
                             if ext_relation in INPUT_RELATIONS:
+                                #
+                                ext_target_n = annot_subgraph.add_instance_of_class(ext_target)
+                                # Need to find what mf we're talking about
+                                anchor_n = annot_subgraph.get_anchor()
+                                annot_subgraph.add_edge(anchor_n, INPUT_RELATIONS[ext_relation], ext_target_n)
+                                #
                                 logger.debug("Adding connection {} {} {}".format(annoton.enabled_by, ext_relation, ext_target))
                                 target_gene_id = self.declare_individual(ext_target)
                                 annoton.individuals[ext_target] = target_gene_id
@@ -461,6 +460,13 @@ class AssocGoCamModel(GoCamModel):
                                         regulates_rel, regulated_mf = self.get_rel_and_term_in_logical_definitions(term)
                                         if regulates_rel and regulated_mf:
                                             # [GP-A]<-enabled_by-[root MF]-regulates->[molecular function Z]-enabled_by->[GP-B]
+                                            #
+                                            ext_target_n = annot_subgraph.add_instance_of_class(ext_target)
+                                            regulated_mf_n = annot_subgraph.add_instance_of_class(regulated_mf)
+                                            annot_subgraph.add_edge(regulated_mf_n, ro.enabled_by, ext_target_n)
+                                            anchor_n = annot_subgraph.get_anchor()
+                                            annot_subgraph.add_edge(anchor_n, regulates_rel, regulated_mf_n)
+                                            #
                                             target_gene_id = self.declare_individual(ext_target)
                                             axiom_id = self.find_or_create_axiom(regulated_mf, ENABLED_BY,
                                                                                  target_gene_id)
@@ -494,7 +500,14 @@ class AssocGoCamModel(GoCamModel):
                                             # print(causally_upstream_relation)
                                             # GP-A<-enabled_by-[root MF]-part_of->[regulation of Z]-has_input->GP-B,-causally upstream of (positive/negative effect)->[root MF]-enabled_by->GP-B
                                             # anchor_uri = root MF
-                                            # First, try SPARQLing full pattern
+                                            #
+                                            ext_target_n = annot_subgraph.add_instance_of_class(ext_target)
+                                            anchor_n = annot_subgraph.get_anchor()
+                                            annot_subgraph.add_edge(anchor_n, INPUT_RELATIONS["has input"], ext_target_n)
+                                            root_mf_b_n = annot_subgraph.add_instance_of_class(upt.molecular_function)
+                                            annot_subgraph.add_edge(anchor_n, causally_upstream_relation, root_mf_b_n)
+                                            annot_subgraph.add_edge(root_mf_b_n, ro.enabled_by, ext_target_n)
+                                            #
                                             target_gene_id = self.declare_individual(ext_target)
                                             axiom_id = self.find_or_create_axiom(anchor_uri, URIRef(expand_uri_wrapper(INPUT_RELATIONS["has input"])), target_gene_id)
                                             axiom_ids.append(axiom_id)
@@ -516,9 +529,10 @@ class AssocGoCamModel(GoCamModel):
 
                     else:
                         logger.debug("BAD: {}".format(ext_str))
+                    # TODO: This is where we write subgraph to model
+                    annot_subgraph.write_to_model(self, evidence)
 
                 # Glom the evidence onto these axioms
-                evidence = GoCamEvidence.create_from_annotation(a)
                 for axiom_id in axiom_ids:
                     self.add_evidence(axiom_id, evidence)
         self.extensions_mapper.go_aspector.write_cache()
@@ -531,24 +545,28 @@ class AssocGoCamModel(GoCamModel):
         annot_subgraph = AnnotationSubgraph(annotation)
         for q in annotation["qualifiers"]:
             if q == "enables":
+                #
+                term_n = annot_subgraph.add_instance_of_class(term, is_anchor=True)
+                enabled_by_n = annot_subgraph.add_instance_of_class(annoton.enabled_by)
+                annot_subgraph.add_edge(term_n, "RO:0002333", enabled_by_n)
+                #
                 axiom_id = self.find_or_create_axiom(term, ENABLED_BY, annoton.enabled_by, annoton=annoton)
-                # annot_subgraph.add_node(term)  # Should this node be an instance of term?
-                # annot_subgraph.add_node(annoton.enabled_by)  # Should this node be an instance of GP?
-                annot_subgraph.add_edge(term, "RO:0002333", annoton.enabled_by)
                 # Get enabled_by URI (owl:annotatedTarget) using axiom_id (a hack because I'm still using Annoton object with gene_connections)
                 enabled_by_uri = list(self.writer.writer.graph.triples((axiom_id, OWL.annotatedTarget, None)))[0][2]
                 anchor_uri = list(self.writer.writer.graph.triples((axiom_id, OWL.annotatedSource, None)))[0][2]
                 annoton.individuals[annoton.enabled_by] = enabled_by_uri
                 axiom_ids.append(axiom_id)
             elif q == "involved_in":
+                #
+                mf_n = annot_subgraph.add_instance_of_class(upt.molecular_function, is_anchor=True)
+                enabled_by_n = annot_subgraph.add_instance_of_class(annoton.enabled_by)
+                term_n = annot_subgraph.add_instance_of_class(term)
+                annot_subgraph.add_edge(mf_n, "RO:0002333", enabled_by_n)
+                annot_subgraph.add_edge(mf_n, "BFO:0000050", term_n)
+                #
                 # Try to find chain of two connected triples
                 rdflib_sparql_wrapper = RdflibSparqlWrapper()
                 involved_in_results = rdflib_sparql_wrapper.find_involved_in_translated(self.graph, annoton.enabled_by, term)
-                # annot_subgraph.add_node("GO:0003674")
-                # annot_subgraph.add_node(annoton.enabled_by)
-                # annot_subgraph.add_node(term)
-                annot_subgraph.add_edge(upt.molecular_function, "RO:0002333", annoton.enabled_by)
-                annot_subgraph.add_edge(upt.molecular_function, "BFO:0000050", term)
                 if len(involved_in_results) > 0:
                     result = list(involved_in_results)[0]
                     anchor_uri = result["mf"]
@@ -569,8 +587,13 @@ class AssocGoCamModel(GoCamModel):
                 # Look for existing GP <- enabled_by [root MF] -> causally_upstream_of BP
                 causally_relation = ENABLES_O_RELATION_LOOKUP[ACTS_UPSTREAM_OF_RELATIONS[q]]
                 causally_relation_uri = URIRef(expand_uri_wrapper(causally_relation))
-                annot_subgraph.add_edge(upt.molecular_function, "RO:0002333", annoton.enabled_by)
-                annot_subgraph.add_edge(upt.molecular_function, causally_relation, term)
+                #
+                mf_n = annot_subgraph.add_instance_of_class(upt.molecular_function, is_anchor=True)
+                enabled_by_n = annot_subgraph.add_instance_of_class(annoton.enabled_by)
+                term_n = annot_subgraph.add_instance_of_class(term)
+                annot_subgraph.add_edge(mf_n, "RO:0002333", enabled_by_n)
+                annot_subgraph.add_edge(mf_n, causally_relation, term_n)
+                #
                 rdflib_sparql_wrapper = RdflibSparqlWrapper()
                 acts_upstream_of_results = rdflib_sparql_wrapper.find_acts_upstream_of_translated(self.graph, annoton.enabled_by, causally_relation, term)
                 if len(acts_upstream_of_results) > 0:
@@ -593,7 +616,11 @@ class AssocGoCamModel(GoCamModel):
             else:
                 relation_uri = URIRef(expand_uri_wrapper(self.relations_dict[q]))
                 # TODO: should check that existing axiom/triple isn't connected to anything else; length matches exactly
-                annot_subgraph.add_edge(annoton.enabled_by, self.relations_dict[q], term)
+                #
+                enabled_by_n = annot_subgraph.add_instance_of_class(annoton.enabled_by)
+                term_n = annot_subgraph.add_instance_of_class(term, is_anchor=True)
+                annot_subgraph.add_edge(enabled_by_n, self.relations_dict[q], term_n)
+                #
                 axiom_id = self.find_or_create_axiom(annoton.enabled_by, relation_uri, term)
                 # Get enabled_by URI (owl:annotatedSource) using axiom_id
                 enabled_by_uri = list(self.graph.triples((axiom_id, OWL.annotatedSource, None)))[0][2]
@@ -609,7 +636,7 @@ class AssocGoCamModel(GoCamModel):
             self.add_evidence(a_id, evidence)
 
         # print(annot_subgraph.edges(data=True))
-        return anchor_uri
+        return anchor_uri, annot_subgraph
 
     def get_restrictions(self, term):
         lds = self.ontology.logical_definitions(term)
