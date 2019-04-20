@@ -128,6 +128,7 @@ class TriplePatternFinder:
             if connected_pair:
                 connected_pair_collection.chain_collection.append(connected_pair)
             else:
+                # TODO: Should this return 'connected_pair_collection' instead?
                 return None
         return connected_pair_collection
 

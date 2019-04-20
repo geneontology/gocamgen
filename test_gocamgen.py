@@ -142,7 +142,6 @@ class TestGoCamModel(unittest.TestCase):
         else:
             self.fail("Couldn't generate model for MGI:MGI:98956")
 
-
     def test_has_regulation_target(self):
         # Examples:
         # F - MGI:MGI:107771 GO:0005096 'has_regulation_target(MGI:MGI:97846)|has_regulation_target(MGI:MGI:2180784)'
