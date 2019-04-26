@@ -134,11 +134,12 @@ class TestGoCamModel(unittest.TestCase):
 
         if model:
             # This example has like 10-20 exp assertions for MGI:MGI:98956 to GO:0060070
+            assertion_count = len(model.associations.collapsed_associations)
             sparql_wrapper = RdflibSparqlWrapper()
             gp = "MGI:MGI:98956"
             term = "GO:0060070"
             qres = sparql_wrapper.find_involved_in_translated(model.graph, gp, term)
-            self.assertEqual(len(qres), 1)
+            self.assertEqual(len(qres), assertion_count)
         else:
             self.fail("Couldn't generate model for MGI:MGI:98956")
 

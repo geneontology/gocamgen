@@ -1,3 +1,7 @@
+from typing import List
+from ontobio.ontol_factory import OntologyFactory
+
+GO_ONTOLOGY = OntologyFactory().create("go")
 
 class CollapsedAssociationSet:
     def __init__(self, associations):
@@ -32,24 +36,7 @@ class CollapsedAssociationSet:
             ca = self.find_or_create_collapsed_association(subj_id, qualifiers, term, with_from, extensions)
 
             # Line
-            source_line = a["source_line"]
-            references = a["evidence"]["has_supporting_reference"]
-            evidence_code = a["evidence"]["type"]
-            date = a["date"]
-            assigned_by = a["provided_by"]
-            association_line = {
-                'source_line': source_line,
-                'evidence': {
-                    'type': evidence_code,
-                    'has_supporting_reference': sorted(references)
-                },
-                'date': date,
-                'provided_by': assigned_by
-            }
-            if "annotation_properties" in a:
-                association_line["annotation_properties"] = a["annotation_properties"]
-            if term != "GO:0005515":
-                association_line['evidence']['with_support_from'] = sorted(with_from)
+            association_line = CollapsedAssociationLine(a)
             ca.lines.append(association_line)
 
     def find_or_create_collapsed_association(self, subj_id, qualifiers, term, with_from, extensions):
@@ -63,8 +50,7 @@ class CollapsedAssociationSet:
             },
             'object_extensions': extensions
         }
-        # TODO: Get "GO:0005515" in onto.ancestors(term, reflexive=True) hooked up
-        if term == "GO:0005515":
+        if "GO:0005515" in GO_ONTOLOGY.ancestors(term, reflexive=True):
             query_header['evidence'] = {'with_support_from': sorted(with_from)}
         for ca in self.collapsed_associations:
             if ca.header == query_header:
@@ -74,13 +60,13 @@ class CollapsedAssociationSet:
         return new_ca
 
     def __iter__(self):
-        return iter(self.associations)
+        return iter(self.collapsed_associations)
 
 
 class CollapsedAssociation:
     def __init__(self, header):
         self.header = header
-        self.lines = []
+        self.lines: List[CollapsedAssociationLine] = []
 
     def subject_id(self):
         if "subject" in self.header and "id" in self.header["subject"]:
@@ -90,8 +76,51 @@ class CollapsedAssociation:
         if "object" in self.header and "id" in self.header["object"]:
             return self.header["object"]["id"]
 
+    def annot_extensions(self):
+        if "object_extensions" in self.header:
+            return self.header["object_extensions"]
+        return {}
+
+    def qualifiers(self):
+        return self.header.get("qualifiers")
+
     def __str__(self):
         return "{} - {}".format(self.subject_id(), self.object_id())
+
+    def __iter__(self):
+        return iter(self.lines)
+
+
+class CollapsedAssociationLine:
+    def __init__(self, assoc):
+        self.source_line = assoc["source_line"]
+        self.references = sorted(assoc["evidence"]["has_supporting_reference"])
+        self.evidence_code = assoc["evidence"]["type"]
+        self.date = assoc["date"]
+        self.assigned_by = assoc["provided_by"]
+        self.annotation_properties = None
+        self.with_from = None
+
+        if "annotation_properties" in assoc:
+            self.annotation_properties = assoc["annotation_properties"]
+        if "GO:0005515" not in GO_ONTOLOGY.ancestors(assoc["object"]["id"], reflexive=True):
+            self.with_from = sorted(assoc["evidence"]["with_support_from"])
+
+    def as_dict(self):
+        ds = {
+            "source_line": self.source_line,
+            "evidence": {
+                "type": self.evidence_code,
+                "has_supporting_reference": self.references
+            },
+            "date": self.date,
+            "provided_by": self.assigned_by,
+        }
+        if self.annotation_properties:
+            ds["annotation_properties"] = self.annotation_properties
+        if self.with_from:
+            ds["evidence"]["with_support_from"] = self.with_from
+        return ds
 
 
 def get_annot_extensions(annot):

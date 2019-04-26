@@ -19,7 +19,7 @@ class AnnotationSubgraph(MultiDiGraph):
 
     def __init__(self, annot):
         MultiDiGraph.__init__(self)
-        self.source_line = annot.get("source_line").rstrip().replace("\t", " ")
+        # self.source_line = annot.get("source_line").rstrip().replace("\t", " ")
         self.class_counts = {}
 
     def add_edge(self, u_for_edge, relation, v_for_edge, key=None, **attr):
@@ -112,11 +112,13 @@ class AnnotationSubgraph(MultiDiGraph):
                     print("{} - {}".format(n, instance_iri))
                 count += 1
 
-    def write_to_model(self, model, evidence):
+    def write_to_model(self, model, evidences, reuse_existing=False):
         # Handles reusing found subgraph IRIs as well as inserting all new individuals
         axiom_ids = []
         exact_match = None
-        response = self.find_matches_in_model(model)
+        response = []
+        if reuse_existing:
+            response = self.find_matches_in_model(model)
         if len(response) > 0:
             for res in response:
                 # TODO: First check that these are "exact" subgraph matches, meaning match result isn't subgraph of other annotation.
@@ -152,9 +154,10 @@ class AnnotationSubgraph(MultiDiGraph):
                 axiom_ids.append(model.add_axiom(model.writer.emit(subject_instance_iri,
                                                                    URIRef(relation_uri),
                                                                    object_instance_iri)))
-        # Add the evidence to whatever axioms we got
+        # Add the evidences to whatever axioms we got
         for axiom_id in axiom_ids:
-            model.add_evidence(axiom_id, evidence)
+            for evidence in evidences:
+                model.add_evidence(axiom_id, evidence)
 
 
 def node_class(node):

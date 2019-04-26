@@ -18,7 +18,7 @@ import logging
 from triple_pattern_finder import TriplePattern, TriplePatternFinder, TriplePair, TriplePairCollection
 from rdflib_sparql_wrapper import RdflibSparqlWrapper
 from gocamgen.subgraphs import AnnotationSubgraph
-from gocamgen.collapsed_assoc import CollapsedAssociationSet, get_annot_extensions
+from gocamgen.collapsed_assoc import CollapsedAssociationSet, CollapsedAssociation, get_annot_extensions
 
 # logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -61,7 +61,8 @@ INPUT_RELATIONS = {
     #TODO Create rule for deciding (MOD-specific?) whether to convert has_direct_input to has input
     # "has_direct_input": "RO:0002400",
     "has_direct_input": "RO:0002233",
-    "has input": "RO:0002233"
+    "has input": "RO:0002233",
+    "has_input": "RO:0002233"
 }
 ACTS_UPSTREAM_OF_RELATIONS = {
     "acts_upstream_of": "RO:0002263",
@@ -143,6 +144,13 @@ class GoCamEvidence:
                            contributors=contributors,
                            date=annot_date,
                            comment=source_line)
+
+    @staticmethod
+    def create_from_collapsed_association(collapsed_association: CollapsedAssociation):
+        evidences = []
+        for line in collapsed_association:
+            evidences.append(GoCamEvidence.create_from_annotation(line.as_dict()))
+        return evidences
 
 
 class GoCamModel():
@@ -399,30 +407,30 @@ class AssocGoCamModel(GoCamModel):
 
         for a in self.associations:
 
-            # TODO: Move away from annoton concept and more focus on model as graph
-            annoton = Annoton(a["subject"]["id"], [a])
-            term = a["object"]["id"]
+            term = a.object_id()
 
-            # Add evidence tied to axiom_ids
-            evidence = GoCamEvidence.create_from_annotation(a)
+            # Add evidences tied to axiom_ids
+            evidences = GoCamEvidence.create_from_collapsed_association(a)
 
-            annotation_extensions = get_annot_extensions(a)
+            annotation_extensions = a.annot_extensions()
 
             # Translate extension - maybe add function argument for custom translations?
             if len(annotation_extensions) == 0:
-                annot_subgraph = self.translate_primary_annotation(a, annoton)
+                annot_subgraph = self.translate_primary_annotation(a)
                 # For annots w/o extensions, this is where we write subgraph to model
-                annot_subgraph.write_to_model(self, evidence)
+                annot_subgraph.write_to_model(self, evidences)
             else:
                 aspect = self.extensions_mapper.go_aspector.go_aspect(term)
 
+                # TODO: Handle deduping in collapsed_assoc
+                annotation_extensions['union_of'] = self.extensions_mapper.dedupe_extensions(annotation_extensions['union_of'])
                 for uo in annotation_extensions['union_of']:
                     int_bits = []
                     for rel in uo["intersection_of"]:
                         int_bits.append("{}({})".format(rel["property"], rel["filler"]))
                     ext_str = ",".join(int_bits)
 
-                    annot_subgraph = self.translate_primary_annotation(a, annoton)
+                    annot_subgraph = self.translate_primary_annotation(a)
                     # Need to make translate_primary_annotation() flexible enough to prevent reusing axioms if
                     # extensions are present. Though axioms can be reused if entire annotation+extension assertion
                     # matches. So does entire assertion graph need to be computed before this method is called?
@@ -498,21 +506,22 @@ class AssocGoCamModel(GoCamModel):
                     else:
                         logger.debug("BAD: {}".format(ext_str))
                     # For annots w/ extensions, this is where we write subgraph to model
-                    annot_subgraph.write_to_model(self, evidence)
+                    annot_subgraph.write_to_model(self, evidences)
         self.extensions_mapper.go_aspector.write_cache()
 
-    def translate_primary_annotation(self, annotation, annoton):
-        term = annotation["object"]["id"]
+    def translate_primary_annotation(self, annotation: CollapsedAssociation):
+        gp_id = annotation.subject_id()
+        term = annotation.object_id()
         annot_subgraph = AnnotationSubgraph(annotation)
 
-        for q in annotation["qualifiers"]:
+        for q in annotation.qualifiers():
             if q == "enables":
                 term_n = annot_subgraph.add_instance_of_class(term, is_anchor=True)
-                enabled_by_n = annot_subgraph.add_instance_of_class(annoton.enabled_by)
+                enabled_by_n = annot_subgraph.add_instance_of_class(gp_id)
                 annot_subgraph.add_edge(term_n, "RO:0002333", enabled_by_n)
             elif q == "involved_in":
                 mf_n = annot_subgraph.add_instance_of_class(upt.molecular_function, is_anchor=True)
-                enabled_by_n = annot_subgraph.add_instance_of_class(annoton.enabled_by)
+                enabled_by_n = annot_subgraph.add_instance_of_class(gp_id)
                 term_n = annot_subgraph.add_instance_of_class(term)
                 annot_subgraph.add_edge(mf_n, "RO:0002333", enabled_by_n)
                 annot_subgraph.add_edge(mf_n, "BFO:0000050", term_n)
@@ -520,7 +529,7 @@ class AssocGoCamModel(GoCamModel):
                 # Look for existing GP <- enabled_by [root MF] -> causally_upstream_of BP
                 causally_relation = ENABLES_O_RELATION_LOOKUP[ACTS_UPSTREAM_OF_RELATIONS[q]]
                 mf_n = annot_subgraph.add_instance_of_class(upt.molecular_function, is_anchor=True)
-                enabled_by_n = annot_subgraph.add_instance_of_class(annoton.enabled_by)
+                enabled_by_n = annot_subgraph.add_instance_of_class(gp_id)
                 term_n = annot_subgraph.add_instance_of_class(term)
                 annot_subgraph.add_edge(mf_n, "RO:0002333", enabled_by_n)
                 annot_subgraph.add_edge(mf_n, causally_relation, term_n)
@@ -529,7 +538,7 @@ class AssocGoCamModel(GoCamModel):
                 do_stuff = 1
             else:
                 # TODO: should check that existing axiom/triple isn't connected to anything else; length matches exactly
-                enabled_by_n = annot_subgraph.add_instance_of_class(annoton.enabled_by)
+                enabled_by_n = annot_subgraph.add_instance_of_class(gp_id)
                 term_n = annot_subgraph.add_instance_of_class(term, is_anchor=True)
                 annot_subgraph.add_edge(enabled_by_n, self.relations_dict[q], term_n)
 

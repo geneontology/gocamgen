@@ -142,21 +142,23 @@ if __name__ == "__main__":
                 logger.error("ERROR: specific gene {} not found in filtered annotation list".format(specific_gene))
             else:
                 logger.debug("{} filtered annotations to translate for {}".format(len(assocs_by_gene[specific_gene]), specific_gene))
+                start_time = time.time()
                 model = builder.translate_to_model(specific_gene, assocs_by_gene[specific_gene])
                 out_filename = "{}.ttl".format(specific_gene.replace(":", "_"))
                 if args.output_directory:
                     out_filename = path.join(args.output_directory, out_filename)
                 model.write(out_filename)
-                logger.info("Model for {} written to {}".format(specific_gene, out_filename))
+                logger.info("Model for {} written to {} in {} sec".format(specific_gene, out_filename, (time.time() - start_time)))
                 model_count += 1
     else:
         for gene in assocs_by_gene:
+            start_time = time.time()
             model = builder.translate_to_model(gene, assocs_by_gene[gene])
             out_filename = "{}.ttl".format(gene.replace(":", "_"))
             if args.output_directory:
                 out_filename = path.join(args.output_directory, out_filename)
             model.write(out_filename)
-            logger.info("Model for {} written to {}".format(gene, out_filename))
+            logger.info("Model for {} written to {} in {} sec".format(gene, out_filename, (time.time() - start_time)))
             model_count += 1
             if args.max_model_limit and model_count == args.max_model_limit:
                 break
