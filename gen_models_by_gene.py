@@ -1,6 +1,7 @@
 from gocamgen.gocamgen import AssocGoCamModel
 from gpad_extensions_mapper import ExtensionsMapper
 from filter_rule import AssocFilter, FilterRule, get_filter_rule
+from gocamgen.collapsed_assoc import extract_properties
 from ontobio.io.gpadparser import GpadParser
 from ontobio.ontol_factory import OntologyFactory
 # from ontobio.ecomap import EcoMap
@@ -29,13 +30,15 @@ parser.add_argument('-r', '--report', help="Generate report", action="store_cons
 class GoCamBuilder:
     def __init__(self):
         self.ext_mapper = ExtensionsMapper()
-        # self.ro_ontology = OntologyFactory().create("http://purl.obolibrary.org/obo/ro.owl")
-        self.go_ontology = OntologyFactory().create("go")
+        self.ro_ontology = OntologyFactory().create("http://purl.obolibrary.org/obo/ro.owl")
+        # Can't get logical_definitions w/ ont.create("go"), need to load ontology via PURL
+        self.go_ontology = OntologyFactory().create("http://purl.obolibrary.org/obo/go.owl")
 
     def translate_to_model(self, gene, assocs):
         model = AssocGoCamModel(gene, assocs)
         model.extensions_mapper = self.ext_mapper
         model.ontology = self.go_ontology
+        model.ro_ontology = self.ro_ontology
         model.translate()
 
         return model
@@ -45,7 +48,7 @@ class AssocExtractor:
     def __init__(self, gpad_file, filter_rule : FilterRule):
         gpad_parser = GpadParser()
         assocs = gpad_parser.parse(gpad_file, skipheader=True)
-        self.assocs = extract_properties(assocs)
+        self.assocs = extract_properties_from_assocs(assocs)
         self.assoc_filter = AssocFilter(filter_rule)
 
     def group_assocs(self):
@@ -62,22 +65,10 @@ class AssocExtractor:
         return assocs_by_gene
 
 
-def extract_properties(assocs):
+def extract_properties_from_assocs(assocs):
     new_assoc_list = []
     for a in assocs:
-        cols = a["source_line"].rstrip().split("\t")
-        if len(cols) >= 12:
-            prop_col = cols[11]
-            props = prop_col.split("|")
-            props_dict = {}
-            for p in props:
-                k, v = p.split("=")
-                if k in props_dict:
-                    props_dict[k].append(v)
-                else:
-                    props_dict[k] = [v]
-            a["annotation_properties"] = props_dict
-        new_assoc_list.append(a)
+        new_assoc_list.append(extract_properties(a))
     return new_assoc_list
 
 
@@ -151,21 +142,23 @@ if __name__ == "__main__":
                 logger.error("ERROR: specific gene {} not found in filtered annotation list".format(specific_gene))
             else:
                 logger.debug("{} filtered annotations to translate for {}".format(len(assocs_by_gene[specific_gene]), specific_gene))
+                start_time = time.time()
                 model = builder.translate_to_model(specific_gene, assocs_by_gene[specific_gene])
                 out_filename = "{}.ttl".format(specific_gene.replace(":", "_"))
                 if args.output_directory:
                     out_filename = path.join(args.output_directory, out_filename)
                 model.write(out_filename)
-                logger.info("Model for {} written to {}".format(specific_gene, out_filename))
+                logger.info("Model for {} written to {} in {} sec".format(specific_gene, out_filename, (time.time() - start_time)))
                 model_count += 1
     else:
         for gene in assocs_by_gene:
+            start_time = time.time()
             model = builder.translate_to_model(gene, assocs_by_gene[gene])
             out_filename = "{}.ttl".format(gene.replace(":", "_"))
             if args.output_directory:
                 out_filename = path.join(args.output_directory, out_filename)
             model.write(out_filename)
-            logger.info("Model for {} written to {}".format(gene, out_filename))
+            logger.info("Model for {} written to {} in {} sec".format(gene, out_filename, (time.time() - start_time)))
             model_count += 1
             if args.max_model_limit and model_count == args.max_model_limit:
                 break

@@ -49,7 +49,6 @@ class TriplePairCollection:
 
 class TriplePatternFinder:
 
-    # TODO: Add 'exact' arg for requiring that found pattern is of exact length as query (nothing continuing on either side)
     def find_pattern_recursive(self, model, pattern: TriplePattern, candidate_chains=[], exact_length=False,
                                pattern_length=None):
         # break down pattern into component triples
@@ -129,6 +128,7 @@ class TriplePatternFinder:
             if connected_pair:
                 connected_pair_collection.chain_collection.append(connected_pair)
             else:
+                # TODO: Should this return 'connected_pair_collection' instead?
                 return None
         return connected_pair_collection
 
@@ -138,7 +138,6 @@ class TriplePatternFinder:
         object_triples = model.triples_involving_individual(triple[2])
         # Er, ANY other triples with subject or object?
         # Any of these contain triples not in chain?
-        drop_chain = False
         for t in subject_triples + object_triples:
             relation_curie = contract_uri_wrapper(t[1])[0]
             # We basically just want to look at RO, BFO relations
