@@ -18,6 +18,7 @@ import logging
 from triple_pattern_finder import TriplePattern, TriplePatternFinder, TriplePair, TriplePairCollection
 from rdflib_sparql_wrapper import RdflibSparqlWrapper
 from gocamgen.subgraphs import AnnotationSubgraph
+from gocamgen.collapsed_assoc import CollapsedAssociationSet, get_annot_extensions
 
 # logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -381,17 +382,20 @@ class GoCamModel():
                 found_triples.append(t)
         return found_triples
 
+
 class AssocGoCamModel(GoCamModel):
 
     def __init__(self, modeltitle, assocs, connection_relations=None):
         GoCamModel.__init__(self, modeltitle, connection_relations)
-        self.associations = assocs
+        self.associations = CollapsedAssociationSet(assocs)
         self.ontology = None
         self.ro_ontology = None
         self.extensions_mapper = None
         self.default_contributor = "http://orcid.org/0000-0002-6659-0416"
 
     def translate(self):
+
+        self.associations.collapse_annotations()
 
         for a in self.associations:
 
@@ -564,14 +568,6 @@ class AssocGoCamModel(GoCamModel):
             return causally_upstream_relations[0]
         else:
             return None
-
-
-def get_annot_extensions(annot):
-    if "object_extensions" in annot:
-        return annot["object_extensions"]
-    elif "extensions" in annot["object"]:
-        return annot["object"]["extensions"]
-    return {}
 
 
 class ReferencePreference:

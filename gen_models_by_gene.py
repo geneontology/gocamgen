@@ -1,6 +1,7 @@
 from gocamgen.gocamgen import AssocGoCamModel
 from gpad_extensions_mapper import ExtensionsMapper
 from filter_rule import AssocFilter, FilterRule, get_filter_rule
+from gocamgen.collapsed_assoc import extract_properties
 from ontobio.io.gpadparser import GpadParser
 from ontobio.ontol_factory import OntologyFactory
 # from ontobio.ecomap import EcoMap
@@ -47,7 +48,7 @@ class AssocExtractor:
     def __init__(self, gpad_file, filter_rule : FilterRule):
         gpad_parser = GpadParser()
         assocs = gpad_parser.parse(gpad_file, skipheader=True)
-        self.assocs = extract_properties(assocs)
+        self.assocs = extract_properties_from_assocs(assocs)
         self.assoc_filter = AssocFilter(filter_rule)
 
     def group_assocs(self):
@@ -64,22 +65,10 @@ class AssocExtractor:
         return assocs_by_gene
 
 
-def extract_properties(assocs):
+def extract_properties_from_assocs(assocs):
     new_assoc_list = []
     for a in assocs:
-        cols = a["source_line"].rstrip().split("\t")
-        if len(cols) >= 12:
-            prop_col = cols[11]
-            props = prop_col.split("|")
-            props_dict = {}
-            for p in props:
-                k, v = p.split("=")
-                if k in props_dict:
-                    props_dict[k].append(v)
-                else:
-                    props_dict[k] = [v]
-            a["annotation_properties"] = props_dict
-        new_assoc_list.append(a)
+        new_assoc_list.append(extract_properties(a))
     return new_assoc_list
 
 
