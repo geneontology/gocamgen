@@ -62,7 +62,8 @@ INPUT_RELATIONS = {
     # "has_direct_input": "RO:0002400",
     "has_direct_input": "RO:0002233",
     "has input": "RO:0002233",
-    "has_input": "RO:0002233"
+    "has_input": "RO:0002233",
+    "occurs_in": "BFO:0000066"
 }
 ACTS_UPSTREAM_OF_RELATIONS = {
     "acts_upstream_of": "RO:0002263",
@@ -456,7 +457,7 @@ class AssocGoCamModel(GoCamModel):
                                 if len(buckets) > 0:
                                     bucket = buckets[0]  # Or express all buckets?
                                     # Four buckets
-                                    if bucket == "a":
+                                    if bucket in ["a", "d"]:
                                         regulates_rel, regulated_mf = self.get_rel_and_term_in_logical_definitions(term)
                                         if regulates_rel and regulated_mf:
                                             # [GP-A]<-enabled_by-[root MF]-regulates->[molecular function Z]-enabled_by->[GP-B]
@@ -475,9 +476,10 @@ class AssocGoCamModel(GoCamModel):
                                             # WB:WBGene00006652 GO:0045944 ['has_regulation_target', 'occurs_in'] ['b']
                                             # WB:WBGene00003639 GO:0036003 ['happens_during', 'has_regulation_target'] ['b']
                                             # Other comma-delimited extensions (e.g. happens_during, has_input) need this triple?
+                                            # WB:WBGene00002335 GO:1902685 ['has_regulation_target', 'occurs_in'] ['d']
                                         else:
                                             logger.warning("Couldn't get regulates relation and/or regulated term from LD of: {}".format(term))
-                                    elif bucket == "b":
+                                    elif bucket in ["b", "c"]:
                                         regulates_rel, regulated_term = self.get_rel_and_term_in_logical_definitions(term)
                                         if regulates_rel:
                                             # find 'Y subPropertyOf regulates_rel' in RO where Y will be `causally
@@ -493,15 +495,9 @@ class AssocGoCamModel(GoCamModel):
                                             root_mf_b_n = annot_subgraph.add_instance_of_class(upt.molecular_function)
                                             annot_subgraph.add_edge(anchor_n, causally_upstream_relation, root_mf_b_n)
                                             annot_subgraph.add_edge(root_mf_b_n, ro.enabled_by, ext_target_n)
+                                            # WB:WBGene00001574 GO:1903363 ['happens_during', 'has_regulation_target'] ['c', 'd']
                                         else:
                                             logger.warning("Couldn't get regulates relation from LD of: {}".format(term))
-                                    elif bucket == "c":
-                                        # WB:WBGene00001574 GO:1903363 ['happens_during', 'has_regulation_target'] ['c', 'd']
-                                        do_stuff = 1
-                                    elif bucket == "d":
-                                        # WB:WBGene00002335 GO:1902685 ['has_regulation_target', 'occurs_in'] ['d']
-                                        do_stuff = 1
-
 
                     else:
                         logger.debug("BAD: {}".format(ext_str))

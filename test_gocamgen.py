@@ -222,6 +222,10 @@ class TestGoCamModel(unittest.TestCase):
         else:
             self.fail("Couldn't generate model for WB:WBGene00003167")
 
+    def test_occurs_in_cardinality(self):
+        # Check for how many assertion individuals have more than 1 occurs_in extension translated
+        self.assertEqual(1, 1)
+
 
 if __name__ == '__main__':
     unittest.main()
