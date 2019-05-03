@@ -28,9 +28,9 @@ class RdflibSparqlWrapper:
         res = self.run_query(graph, query)
         return res
 
-    def find_triple_by_class(self, graph: Graph, s, p, o):
+    def find_triple_by_class(self, graph: Graph, s="?any_s", p="?any_p", o="?any_o"):
         query = """
-            SELECT 
+            SELECT *
             WHERE {{
                 ?s rdf:type {s} .
                 ?o rdf:type {o} .
@@ -56,5 +56,26 @@ class RdflibSparqlWrapper:
                 ?mf {causally_rel} ?term
             }}
         """.format(gp=gp, term=term, causally_rel=causally_rel)
+        res = self.run_query(graph, query)
+        return res
+
+    def find_evidence_with(self, graph, annotated_source, annotated_property, annotated_target):
+        # TODO: Just get all evidence properties e.g. contributors, date, reference
+        query = """
+            PREFIX lego: <http://geneontology.org/lego/>
+        
+            select *
+            where {{
+                ?source rdf:type {annotated_source} .
+                ?target rdf:type {annotated_target} .
+                                
+                ?axiom owl:annotatedSource ?source .
+                ?axiom owl:annotatedProperty {annotated_property} .
+                ?axiom owl:annotatedTarget ?target .
+                ?axiom lego:evidence ?evidence .
+                
+                ?evidence lego:evidence-with ?evi_with
+            }}
+        """.format(annotated_source=annotated_source, annotated_property=annotated_property, annotated_target=annotated_target)
         res = self.run_query(graph, query)
         return res

@@ -120,12 +120,13 @@ class Annoton():
 class GoCamEvidence:
     DEFAULT_CONTRIBUTOR = "http://orcid.org/0000-0002-6659-0416"
 
-    def __init__(self, code, references, contributors=[], date="", comment=""):
+    def __init__(self, code, references, contributors=[], date="", comment="", with_from=None):
         self.evidence_code = code
         self.references = references
         self.date = date
         self.contributors = contributors
         self.comment = comment
+        self.with_from = with_from
         self.id = None
 
     @staticmethod
@@ -150,7 +151,14 @@ class GoCamEvidence:
     def create_from_collapsed_association(collapsed_association: CollapsedAssociation):
         evidences = []
         for line in collapsed_association:
-            evidences.append(GoCamEvidence.create_from_annotation(line.as_dict()))
+            if line.with_from:
+                for wf in line.with_from:
+                    evidence = GoCamEvidence.create_from_annotation(line.as_dict())
+                    evidence.with_from = wf
+                    evidences.append(evidence)
+            else:
+                evidence = GoCamEvidence.create_from_annotation(line.as_dict())
+                evidences.append(evidence)
         return evidences
 
 
@@ -172,6 +180,7 @@ class GoCamModel():
         "acts_upstream_of_negative_effect": "RO:0004035",
         "acts_upstream_of_or_within": "RO:0002264",
         "acts_upstream_of_positive_effect": "RO:0004034",
+        "acts upstream of, negative effect": "RO:0004035",
     }
 
     def __init__(self, modeltitle, connection_relations=None):
@@ -274,7 +283,6 @@ class GoCamModel():
         ### Emit ev fields to axiom here TODO: Couple evidence and axiom emitting together
         self.writer.emit(axiom, DC.date, Literal(evidence.date))
         self.writer.emit(axiom, RDFS.comment, Literal(evidence.comment))
-        # self.writer.emit(axiom, RDFS.comment, Literal(""))
         for c in evidence.contributors:
             self.writer.emit(axiom, DC.contributor, Literal(c))
 
@@ -538,6 +546,12 @@ class AssocGoCamModel(GoCamModel):
                 term_n = annot_subgraph.add_instance_of_class(term, is_anchor=True)
                 annot_subgraph.add_edge(enabled_by_n, self.relations_dict[q], term_n)
 
+        with_froms = annotation.with_from()
+        if with_froms:
+            for wf in with_froms:
+                wf_n = annot_subgraph.add_instance_of_class(wf)
+                annot_subgraph.add_edge(annot_subgraph.get_anchor(), "RO:0002233", wf_n)
+
         return annot_subgraph
 
     def get_restrictions(self, term):
@@ -642,6 +656,8 @@ class AnnotonCamRdfTransform(CamRdfTransform):
         self.emit_type(ev_id, OWL.NamedIndividual)
         self.emit_type(ev_id, ev_cls)
         self.emit(ev_id, DC.date, Literal(evidence.date))
+        if evidence.with_from:
+            self.emit(ev_id, URIRef("http://geneontology.org/lego/evidence-with"), Literal(evidence.with_from))
         for c in evidence.contributors:
             self.emit(ev_id, DC.contributor, Literal(c))
         ref_to_emit = ReferencePreference().pick(evidence.references)
