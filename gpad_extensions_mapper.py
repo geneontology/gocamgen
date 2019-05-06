@@ -14,6 +14,8 @@ import argparse
 import logging
 from pathlib import Path
 
+DISTINCT_EXTENSIONS = {}
+
 # logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 logger.setLevel("INFO")
@@ -27,6 +29,8 @@ parser.add_argument("-p", "--pattern")
 parser.add_argument("-q", "--pattern_outfile")
 parser.add_argument("-r", "--pattern_sourcefile")
 parser.add_argument("-m", "--mod")
+parser.add_argument("-e", "--extensions_list", action='store_const', const=True,
+                    help="Print out distinct extensions list")
 
 ontology_prefixes = []
 for k, v in prefix_context.items():
@@ -428,6 +432,11 @@ if __name__ == "__main__":
                 # }
                 for onto_ext in ontobio_extensions:
                     ext_list = extensions_mapper.extensions_list(onto_ext['intersection_of'])
+                    for e in ext_list:
+                        if e not in DISTINCT_EXTENSIONS:
+                            DISTINCT_EXTENSIONS[e] = 1
+                        else:
+                            DISTINCT_EXTENSIONS[e] += 1
                     if not following_rules(ext_list, aspect):
                         ext_key = ",".join(ext_list)
                         if ext_key not in ext_dict[aspect]:
@@ -541,3 +550,10 @@ if __name__ == "__main__":
                 wanted_gafs = wanted_gafs + ext_dict['P'][k]
                 for g in ext_dict['P'][k]:
                     wf.write("\t".join(g))
+
+    if args.extensions_list:
+        with open("distinct_extensions.txt", "w+") as de_f:
+            de_writer = csv.writer(de_f, delimiter="\t")
+            de_writer.writerow(["pattern", "usage count"])
+            for e in DISTINCT_EXTENSIONS:
+                de_writer.writerow([e, DISTINCT_EXTENSIONS[e]])
