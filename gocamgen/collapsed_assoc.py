@@ -5,6 +5,7 @@ from ontobio.io.assocparser import SplitLine
 
 GO_ONTOLOGY = OntologyFactory().create("go")
 GPAD_PARSER = GpadParser()
+BINDING_ROOT = "GO:0005488"  # binding
 
 class CollapsedAssociationSet:
     def __init__(self, associations):
@@ -19,12 +20,12 @@ class CollapsedAssociationSet:
         # 		1. ID
         # 		2. qualifiers (normalize order; any array gotta do this)
         # 		3. primary term
-        # 		4. With/From (if primary term is GO:0005515 or descendant)
+        # 		4. With/From (if primary term is BINDING_ROOT or descendant)
         # 		5. Extensions
         # 	Collapse multiple:
         # 		1. Reference
         # 		2. Evidence Code
-        #       3. With/From (if primary term is not GO:0005515 or descendant)
+        #       3. With/From (if primary term is not BINDING_ROOT or descendant)
         # 		4. Source line
         # 		5. Date
         # 		6. Assigned by
@@ -37,7 +38,7 @@ class CollapsedAssociationSet:
             with_from = a["evidence"]["with_support_from"]
             extensions = get_annot_extensions(a)
             with_froms = get_with_froms(a)  # Handle pipe separation according to import requirements
-            is_protein_binding = "GO:0005515" in GO_ONTOLOGY.ancestors(term, reflexive=True)
+            is_protein_binding = BINDING_ROOT in GO_ONTOLOGY.ancestors(term, reflexive=True)
             if is_protein_binding:
                 cas = self.find_or_create_collapsed_associations(subj_id, qualifiers, term, with_froms, extensions)
                 with_from = None  # Don't use ontobio-parsed with_from on lines

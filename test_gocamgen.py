@@ -237,6 +237,12 @@ class TestGoCamModel(unittest.TestCase):
         qres = sparql_wrapper.find_triple_by_class(model.graph, "GO:0005515", has_input, "WB:WBGene00015146")
         self.assertEqual(len(qres), 1)
 
+        # DNA binding case - same as protein binding - should have with/from value as term-has_input->with/from:
+        model = self.gen_model(gpad_file="resources/test/mgi.gpa.MGI_97747", test_gene="MGI:MGI:97747",
+                               filter_rule=MGIFilterRule())
+        qres = sparql_wrapper.find_triple_by_class(model.graph, "GO:0003677", has_input, "UniProtKB:P28700")
+        self.assertEqual(len(qres), 1)
+
         # Protein binding descendant case - should have with/from value as term-has_input->with/from:
         #  GO:0019894 - kinesin binding
         model = self.gen_model(gpad_file="resources/test/wb.gpad.WBGene00000099", test_gene="WB:WBGene00000099",
