@@ -220,15 +220,16 @@ class TestGoCamModel(unittest.TestCase):
         self.assertIn("MGI:MGI:2180333", withs)
 
         # Non-protein binding case w/ commas
-        # MGI     MGI:87859       enables GO:0004713      MGI:MGI:4833709|PMID:20823226   ECO:0000315     MGI:MGI:3525886,MGI:MGI:2176222         20140711        MGI     occurs_in(CL:0000540),has_direct_input(MGI:MGI:1355296)
         model = self.gen_model(gpad_file="resources/test/mgi.gpa.MGI_87859", test_gene="MGI:MGI:87859",
                                filter_rule=MGIFilterRule())
         qres = sparql_wrapper.find_evidence_with(model.graph, "GO:0004713", enabled_by, "MGI:MGI:87859")
         withs = []
         for r in qres:
             withs.append(str(r["evi_with"]))
-        self.assertIn("MGI:MGI:3525886", withs)
-        self.assertIn("MGI:MGI:2176222", withs)
+        # Current test is invalid now that we aren't splitting commas.
+        #  AssertionError: 'MGI:MGI:3525886' not found in ['MGI:MGI:87860', 'MGI:MGI:87860', 'MGI:MGI:2176222,MGI:MGI:3525886', 'MGI:MGI:104738', 'MGI:MGI:87860']
+        # self.assertIn("MGI:MGI:3525886", withs)
+        # self.assertIn("MGI:MGI:2176222", withs)
 
         # Protein binding case - should have with/from value as term-has_input->with/from:
         model = self.gen_model(gpad_file="resources/test/wb.gpad.WBGene00000018", test_gene="WB:WBGene00000018",
@@ -247,7 +248,6 @@ class TestGoCamModel(unittest.TestCase):
         #  GO:0017022 - myosin binding
         model = self.gen_model(gpad_file="resources/test/wb.gpad.WBGene00002173", test_gene="WB:WBGene00002173",
                                filter_rule=WBFilterRule())
-        # qres = sparql_wrapper.find_triple_by_class(model.graph, "GO:0017022", "RO:0002233", "WB:WBGene00002348")
         qres = sparql_wrapper.find_triple_by_class(model.graph, "GO:0017022", has_input)
         # Assert there are 3 distinct individuals of GO:0017022 in these results
         result_subj_individuals = []
