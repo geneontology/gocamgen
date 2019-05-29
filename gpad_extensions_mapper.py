@@ -80,6 +80,7 @@ PROCESS_SINGLES_ONLY = [
     "occurs_in(CL)",
     "occurs_in(UBERON)",
     "occurs_in(EMAPA)",
+    "occurs_in(WBbt)",
     "has_input(geneID)",
     "has_input(CHEBI)",
     "has_direct_input(geneID)",
@@ -95,6 +96,8 @@ for r in FUNCTION_SINGLES_ONLY + COMPONENT_SINGLES_ONLY + PROCESS_SINGLES_ONLY:
 EXTENSION_RELATION_UNIVERSE.append([
     "has_regulation_target(geneID)"
 ])
+
+RO_ONTOLOGY = OntologyFactory().create("http://purl.obolibrary.org/obo/ro.owl")
 
 
 gaf_indices = {}
@@ -218,6 +221,15 @@ def violates_combo_rule(extension_counts, list_of_combo_lists, max_allowed):
             return True
     return False
 
+def is_nested_occurs_in_grouping(extensions_list):
+    # When annotation extensions are comma delimited and are from GO_CC, CL and an anatomy ontology
+    # then the model should indicate GO_CC -> part_of->CL->part_of->anatomy.
+    # Filter occurs_in extensions
+    # Gather terms, arrange
+    # When would multiple occurs_in's cause this to fail? Multiple occurs_in(GO:CC), unless CC's are related? Examples?
+    #
+    do_stuff = 1
+
 def following_rules(extension_list, aspect):
     ext_counts = {}
     for e in extension_list:
@@ -290,6 +302,7 @@ def following_rules(extension_list, aspect):
         return False
     return True
 
+
 def filter_no_rules_broken(annots):
     filtered = []
     for a in annots:
@@ -302,7 +315,7 @@ class ExtensionsMapper():
     def __init__(self):
         self.go_aspector = CachedGoAspector("resources/aspect_lookup.json")
 
-    def extensions_list(self, intersection_extensions):
+    def extensions_list(self, intersection_extensions, row_cols=[]):
         ext_list = []
         # Assuming these extensions are already separated by comma
         intersection_extensions = self.dedupe_extensions(intersection_extensions)
@@ -311,21 +324,30 @@ class ExtensionsMapper():
             term_prefix = ext_term.split(":")[0]
             # is prefix for ontology or mod?
             if term_prefix in ontology_prefixes:
-                go_aspect = None
-                ont = ""
                 if term_prefix == "GO":
                     # need to find aspect of GO term
-                    # go_aspect = get_go_aspect(ext_term)
                     go_aspect = self.go_aspector.go_aspect(ext_term)
                     if go_aspect is not None:
                         ont = "GO:" + go_aspect
                     else:
                         logger.warning("No aspect found for term: {}".format(ext_term))
+                        ont = "GO"
                 else:
                     ont = term_prefix
-                ext_list.append("{}({})".format(relation, ont))
+                term_prefix = ont
             else:
-                ext_list.append("{}(geneID)".format(relation))
+                term_prefix = "geneID"
+            ext_list.append("{}({})".format(relation, term_prefix))
+            # Track stats - make sure to get GO aspect from ont var
+            if relation not in DISTINCT_EXTENSIONS:
+                DISTINCT_EXTENSIONS[relation] = {}
+            if term_prefix not in DISTINCT_EXTENSIONS[relation]:
+                # should be checking for duplicate rows
+                DISTINCT_EXTENSIONS[relation][term_prefix] = []
+            # else:
+            #     DISTINCT_EXTENSIONS[relation][term_prefix] += 1
+            # if row_cols not in DISTINCT_EXTENSIONS[relation][term_prefix]:
+            DISTINCT_EXTENSIONS[relation][term_prefix].append(row_cols)
         # ordering of extension relations may be inconsistent so sort
         return sorted(ext_list, key=str.lower)
 
@@ -357,19 +379,39 @@ d = [
     "isoform",
     "goa_pdb",
     "goa_uniprot_all.gaf",
-
 ]
+
+
+def translate_relation_to_ro(relation_label):
+    for n in RO_ONTOLOGY.nodes():
+        node_label = RO_ONTOLOGY.label(n)
+        if node_label == relation_label.replace("_", " "):
+            return n
 
 
 if __name__ == "__main__":
     args = parser.parse_args()
 
-    filenames = []
+    def get_filter_name(gpad_fname):
+        if args.mod:
+            filter_name = args.mod
+        else:
+            # Try matching filename to filter rule (e.g. wb.gpad to 'WB' to WBFilterRule)
+            filter_name = os.path.basename(os.path.splitext(gpad_fname)[0]).upper()
+        return filter_name
+
+
+    # filenames = []
+    # Use dict for holding different FilterRules for each file
+    filenames = {}
     # data = []
     # fname = "/Users/ebertdu/go/go-pombase/gene_association.pombase-06-2018"
     # data = GafParser().parse(fname, skipheader=True)
     if args.filename is not None:
-        filenames.append(args.filename)
+        # filenames.append(args.filename)
+        filter_name = get_filter_name(args.filename)
+        filter_rule = get_filter_rule(filter_name)
+        filenames[args.filename] = filter_rule
         # data = GafParser().parse(args.filename, skipheader=True)
     elif args.dir is not None:
         for fname in os.listdir(args.dir):
@@ -380,7 +422,9 @@ if __name__ == "__main__":
                     nono_in_fname = True
             if fname.endswith(".tsv") or nono_in_fname:
                 continue
-            filenames.append(args.dir + fname)
+            # filenames.append(args.dir + fname)
+            filter_name = get_filter_name(fname)
+            filenames[args.dir + fname] = get_filter_rule(filter_name)
             # data = data + GafParser().parse(fname, skipheader=True)
 
     # all_dict = {}
@@ -403,7 +447,8 @@ if __name__ == "__main__":
             print("# of GPAD lines in file:", len(data))
             data = filter_has_extension(data)
             print("# of GPAD lines having extensions:", len(data))
-            filter_rule = get_filter_rule(args.mod)
+            # filter_rule = get_filter_rule(args.mod)
+            filter_rule = filenames[fname]
             assoc_filter = AssocFilter(filter_rule)
             data = filter_rule_validate_lines(data, assoc_filter)
             print("Total GPAD count after applying {}: {}".format(filter_rule.__class__.__name__, len(data)))
@@ -431,17 +476,12 @@ if __name__ == "__main__":
                 #     ]
                 # }
                 for onto_ext in ontobio_extensions:
-                    ext_list = extensions_mapper.extensions_list(onto_ext['intersection_of'])
-                    for e in ext_list:
-                        if e not in DISTINCT_EXTENSIONS:
-                            DISTINCT_EXTENSIONS[e] = 1
-                        else:
-                            DISTINCT_EXTENSIONS[e] += 1
+                    ext_list = extensions_mapper.extensions_list(onto_ext['intersection_of'], g)
                     if not following_rules(ext_list, aspect):
                         ext_key = ",".join(ext_list)
                         if ext_key not in ext_dict[aspect]:
                             ext_dict[aspect][ext_key] = [g]
-                        else:
+                        elif g not in ext_dict[aspect][ext_key]:
                             ext_dict[aspect][ext_key].append(g)
 
             for aspect in ['F','P','C']:
@@ -490,9 +530,11 @@ if __name__ == "__main__":
     class WriterCollection:
         def __init__(self):
             self.writers = {}
+            self.rows = {}
 
         def set_writer(self, writer, writer_name):
             self.writers[writer_name] = writer
+            self.rows[writer_name] = []
 
 
     patterns = []
@@ -528,14 +570,18 @@ if __name__ == "__main__":
                 row_to_write = [aspect, len(v), k]
                 if len(patterns) > 0:
                     for patt in patterns:
-                        if k == patt:
+                        # if k == patt:
+                        if patt in k:
                             for a in v:
-                                writers.writers[patt].writerow(a[0:len(a)-1])
+                                writers.rows[patt].append(a[0:len(a)-1])
+                                # writers.writers[patt].writerow(a[0:len(a)-1])
                 for assigner in all_assigners:
                     a_count = assigner_count(v, assigner)
                     row_to_write.append(a_count)
                 writer.writerow(row_to_write)
     for writer_name in writers.writers:
+        for row in writers.rows[writer_name]:
+            writers.writers[writer_name].writerow(row)
         gpad_file = writers.writers[writer_name].gpad_file
         print("Offending GPAD lines written to:", gpad_file.name)
         gpad_file.close()
@@ -554,6 +600,18 @@ if __name__ == "__main__":
     if args.extensions_list:
         with open("distinct_extensions.txt", "w+") as de_f:
             de_writer = csv.writer(de_f, delimiter="\t")
-            de_writer.writerow(["pattern", "usage count"])
-            for e in DISTINCT_EXTENSIONS:
-                de_writer.writerow([e, DISTINCT_EXTENSIONS[e]])
+            de_writer.writerow(["pattern", "namespaces", "usage count", "line count", "RO code"])
+            for rel in DISTINCT_EXTENSIONS:
+                distinct_lines = []
+                usage_count = 0
+                ro_rel = translate_relation_to_ro(rel)
+                for prefix in DISTINCT_EXTENSIONS[rel]:
+                    usage_count += len(DISTINCT_EXTENSIONS[rel][prefix])
+                    # distinct_lines = []
+                    for line in DISTINCT_EXTENSIONS[rel][prefix]:
+                        if line not in distinct_lines:
+                            distinct_lines.append(line)
+                    # line_count = len(distinct_lines)
+                    # de_writer.writerow(["{}({})".format(rel, prefix), len(DISTINCT_EXTENSIONS[rel][prefix]), line_count])
+                line_count = len(distinct_lines)
+                de_writer.writerow([rel, ",".join(DISTINCT_EXTENSIONS[rel].keys()), usage_count, line_count, ro_rel])
