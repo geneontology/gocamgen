@@ -120,8 +120,6 @@ class CollapsedAssociationLine:
         self.assigned_by = assoc["provided_by"]
         self.annotation_properties = None
         self.with_from = with_from
-        if self.with_from:
-            self.with_from = sorted(self.with_from)
 
         if "annotation_properties" in assoc:
             self.annotation_properties = assoc["annotation_properties"]

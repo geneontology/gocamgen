@@ -151,14 +151,10 @@ class GoCamEvidence:
     def create_from_collapsed_association(collapsed_association: CollapsedAssociation):
         evidences = []
         for line in collapsed_association:
+            evidence = GoCamEvidence.create_from_annotation(line.as_dict())
             if line.with_from:
-                for wf in line.with_from:
-                    evidence = GoCamEvidence.create_from_annotation(line.as_dict())
-                    evidence.with_from = wf
-                    evidences.append(evidence)
-            else:
-                evidence = GoCamEvidence.create_from_annotation(line.as_dict())
-                evidences.append(evidence)
+                evidence.with_from = ",".join(line.with_from)
+            evidences.append(evidence)
         return evidences
 
 
