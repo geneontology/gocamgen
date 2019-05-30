@@ -436,21 +436,20 @@ class AssocGoCamModel(GoCamModel):
                     ext_str = ",".join(int_bits)
 
                     annot_subgraph = self.translate_primary_annotation(a)
-                    # Need to make translate_primary_annotation() flexible enough to prevent reusing axioms if
-                    # extensions are present. Though axioms can be reused if entire annotation+extension assertion
-                    # matches. So does entire assertion graph need to be computed before this method is called?
-                    # Ex of multi comma-delimited extensions:
-                    # WB:WBGene00001173 GO:0051343 ['has_regulation_target', 'occurs_in']
-                    # WB:WBGene00001173 GO:0051343 ['has_regulation_target']
-                    # Can the 2nd annot reuse 1st's full has_regulation_target chain? Assuming NO
 
                     intersection_extensions = self.extensions_mapper.dedupe_extensions(uo['intersection_of'])
-                    is_cool = self.extensions_mapper.annot_following_rules(intersection_extensions, aspect)
+                    # is_cool = self.extensions_mapper.annot_following_rules(intersection_extensions, aspect)
+                    is_cool = True  # Open the flood gates
                     if is_cool:
                         logger.debug("GOOD: {}".format(ext_str))
                         for rel in intersection_extensions:
                             ext_relation = rel["property"]
                             ext_target = rel["filler"]
+                            if ext_relation not in list(INPUT_RELATIONS.keys()) + list(HAS_REGULATION_TARGET_RELATIONS.keys()):
+                                # No RO term yet. Try looking up in RO
+                                relation_term = self.translate_relation_to_ro(ext_relation)
+                                if relation_term:
+                                    INPUT_RELATIONS[ext_relation] = relation_term
                             if ext_relation in INPUT_RELATIONS:
                                 ext_target_n = annot_subgraph.add_instance_of_class(ext_target)
                                 # Need to find what mf we're talking about
@@ -502,6 +501,10 @@ class AssocGoCamModel(GoCamModel):
                                             # WB:WBGene00001574 GO:1903363 ['happens_during', 'has_regulation_target'] ['c', 'd']
                                         else:
                                             logger.warning("Couldn't get regulates relation from LD of: {}".format(term))
+                            # else:
+                            #     # No RO term yet. Try looking up in RO
+                            #     relation_term = self.translate_relation_to_ro(ext_relation)
+                            #     INPUT_RELATIONS[ext_relation] = relation_term
 
                     else:
                         logger.debug("BAD: {}".format(ext_str))
@@ -549,6 +552,12 @@ class AssocGoCamModel(GoCamModel):
                 annot_subgraph.add_edge(annot_subgraph.get_anchor(), "RO:0002233", wf_n)
 
         return annot_subgraph
+
+    def translate_relation_to_ro(self, relation_label):
+        for n in self.ro_ontology.nodes():
+            node_label = self.ro_ontology.label(n)
+            if node_label == relation_label.replace("_", " "):
+                return n
 
     def get_restrictions(self, term):
         lds = self.ontology.logical_definitions(term)
