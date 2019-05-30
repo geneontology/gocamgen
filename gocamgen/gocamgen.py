@@ -591,13 +591,13 @@ class ReferencePreference:
         self.order_of_prefix_preference = [
             "PMID",
             "GO_REF",
-            "doi"
+            "DOI"
         ]
 
     def pick(self, references):
         for pfx in self.order_of_prefix_preference:
             for ref in references:
-                if ref.startswith(pfx):
+                if ref.startswith(pfx.upper()):
                     return ref
 
 
