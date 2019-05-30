@@ -597,7 +597,7 @@ class ReferencePreference:
     def pick(self, references):
         for pfx in self.order_of_prefix_preference:
             for ref in references:
-                if ref.startswith(pfx.upper()):
+                if ref.upper().startswith(pfx.upper()):
                     return ref
 
 
