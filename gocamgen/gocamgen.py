@@ -180,6 +180,8 @@ class GoCamModel():
         "acts_upstream_of_or_within": "RO:0002264",
         "acts_upstream_of_positive_effect": "RO:0004034",
         "acts upstream of, negative effect": "RO:0004035",
+        "acts_upstream_of_or_within_negative_effect": "RO:0004033",
+        "acts_upstream_of_or_within_positive_effect": "RO:0004032"
     }
 
     def __init__(self, modeltitle, connection_relations=None):
@@ -575,10 +577,11 @@ class AssocGoCamModel(GoCamModel):
                     for xref in xrefs:
                         val = xref['val']
                         if val.startswith('RO') or val.startswith('BFO'):
-                            print("{} xref'd to {}".format(n, val))
+                            # print("{} xref'd to {}".format(n, val))
                             return val
                     fallback_rel = xrefs[0]['val']  # default to the the first xref - usually GOREL
                     self.writer.emit_type(URIRef(expand_uri_wrapper(fallback_rel)), OWL.ObjectProperty)
+                    self.writer.emit(URIRef(expand_uri_wrapper(fallback_rel)), RDFS.label, Literal(relation_label))
                     return fallback_rel
                 # print(gorel_node)  # No such luck so far getting matches
 
