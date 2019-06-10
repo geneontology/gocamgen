@@ -32,13 +32,16 @@ LAYOUT = Namespace("http://geneontology.org/lego/hint/layout/")
 PAV = Namespace('http://purl.org/pav/')
 DC = Namespace("http://purl.org/dc/elements/1.1/")
 RDFS = Namespace("http://www.w3.org/2000/01/rdf-schema#")
+GOREL = Namespace("http://purl.obolibrary.org/obo/GOREL_")
 
 # Stealing a lot of code for this from ontobio.rdfgen:
 # https://github.com/biolink/ontobio
 
 
 def expand_uri_wrapper(id):
-    uri = expand_uri(id, cmaps=[prefix_context])
+    c = prefix_context
+    c['GOREL'] = "http://purl.obolibrary.org/obo/GOREL_"
+    uri = expand_uri(id, cmaps=[c])
     return uri
 
 def contract_uri_wrapper(id):
@@ -403,8 +406,10 @@ class AssocGoCamModel(GoCamModel):
         self.associations = CollapsedAssociationSet(assocs)
         self.ontology = None
         self.ro_ontology = None
+        self.gorel_ontology = None
         self.extensions_mapper = None
         self.default_contributor = "http://orcid.org/0000-0002-6659-0416"
+        self.graph.bind("GOREL", GOREL)  # Because GOREL isn't in context.jsonld's
 
     def translate(self):
 
@@ -449,6 +454,7 @@ class AssocGoCamModel(GoCamModel):
                                 # No RO term yet. Try looking up in RO
                                 relation_term = self.translate_relation_to_ro(ext_relation)
                                 if relation_term:
+                                    # print("Ext relation {} auto-mapped to {} in {}".format(ext_relation, relation_term, a.subject_id()))
                                     INPUT_RELATIONS[ext_relation] = relation_term
                             if ext_relation in INPUT_RELATIONS:
                                 ext_target_n = annot_subgraph.add_instance_of_class(ext_target)
@@ -554,10 +560,27 @@ class AssocGoCamModel(GoCamModel):
         return annot_subgraph
 
     def translate_relation_to_ro(self, relation_label):
+        # Also check in GO_REL and use xref to RO
         for n in self.ro_ontology.nodes():
             node_label = self.ro_ontology.label(n)
             if node_label == relation_label.replace("_", " "):
                 return n
+        for n in self.gorel_ontology.nodes():
+            node_label = self.gorel_ontology.label(n)
+            if node_label == relation_label:
+                gorel_node = self.gorel_ontology.node(n)
+                # What we want will likely be in xref:
+                xrefs = gorel_node['meta'].get('xrefs')
+                if xrefs and len(xrefs) > 0:
+                    for xref in xrefs:
+                        val = xref['val']
+                        if val.startswith('RO') or val.startswith('BFO'):
+                            print("{} xref'd to {}".format(n, val))
+                            return val
+                    fallback_rel = xrefs[0]['val']  # default to the the first xref - usually GOREL
+                    self.writer.emit_type(URIRef(expand_uri_wrapper(fallback_rel)), OWL.ObjectProperty)
+                    return fallback_rel
+                # print(gorel_node)  # No such luck so far getting matches
 
     def get_restrictions(self, term):
         lds = self.ontology.logical_definitions(term)

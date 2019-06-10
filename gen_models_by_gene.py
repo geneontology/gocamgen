@@ -31,6 +31,7 @@ class GoCamBuilder:
     def __init__(self):
         self.ext_mapper = ExtensionsMapper()
         self.ro_ontology = OntologyFactory().create("http://purl.obolibrary.org/obo/ro.owl")
+        self.gorel_ontology = OntologyFactory().create("http://release.geneontology.org/2019-03-18/ontology/extensions/gorel.obo")
         # Can't get logical_definitions w/ ont.create("go"), need to load ontology via PURL
         self.go_ontology = OntologyFactory().create("http://purl.obolibrary.org/obo/go.owl")
 
@@ -39,6 +40,7 @@ class GoCamBuilder:
         model.extensions_mapper = self.ext_mapper
         model.ontology = self.go_ontology
         model.ro_ontology = self.ro_ontology
+        model.gorel_ontology = self.gorel_ontology
         model.translate()
 
         return model
