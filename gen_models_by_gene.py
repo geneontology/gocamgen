@@ -26,7 +26,9 @@ parser.add_argument('-m', '--mod', help="MOD rules to follow for filtering and t
 parser.add_argument('-d', '--output_directory', help="Directory to output model ttl files to")
 parser.add_argument('-r', '--report', help="Generate report", action="store_const", const=True)
 
+# GoCamInputHandler
 
+# class GoCamGPADInputHandler(GoCamInputHandler):
 class GoCamBuilder:
     def __init__(self):
         self.ext_mapper = ExtensionsMapper()

@@ -527,6 +527,13 @@ class AssocGoCamModel(GoCamModel):
 
         for q in annotation.qualifiers():
             if q == "enables":
+                
+                # activity = Activity(term_n, "fake_label")
+                # gene_product = GeneProduct(gp_id)
+                # aa = ActivityAssociation(activity, gene_product)
+                # aa.set_evidence()
+                # activity.set_activity_association(aa)
+
                 term_n = annot_subgraph.add_instance_of_class(term, is_anchor=True)
                 enabled_by_n = annot_subgraph.add_instance_of_class(gp_id)
                 annot_subgraph.add_edge(term_n, "RO:0002333", enabled_by_n)
