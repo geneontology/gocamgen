@@ -53,7 +53,77 @@ acceptable_evidence_codes = [
 ]
 ecomap = EcoMap()
 
-# Extension rules
+class ExtRelationPattern:
+    def __init__(self, ext_relation, ext_namespaces, primary_term_roots=None, max_allowed=None):
+        self.ext_relation = ext_relation
+        self.ext_namespaces = ext_namespaces
+        self.max_allowed = max_allowed  # cardinality?
+        self.primary_term_roots = primary_term_roots if isinstance(primary_term_roots, list) else [primary_term_roots]
+        # TODO: Also handle primary_term_roots == None
+
+
+class ExtRelationValidPattern(ExtRelationPattern):
+    def __init__(self, ext_relation, ext_namespaces, primary_term_roots=None, max_allowed=None):
+        ExtRelationPattern.__init__(self, ext_relation, ext_namespaces, primary_term_roots, max_allowed)
+        self.is_valid = True
+
+
+class ExtRelationInvalidPattern(ExtRelationPattern):
+    def __init__(self, ext_relation, ext_namespaces, primary_term_roots=None, max_allowed=None):
+        ExtRelationPattern.__init__(self, ext_relation, ext_namespaces, primary_term_roots, max_allowed)
+        self.is_valid = False
+
+MOLECULAR_FUNCTION = "GO:0003674"
+BIOLOGICAL_PROCESS = "GO:0008150"
+CELLULAR_COMPONENT = "GO:0005575"
+# Testing DS:
+ext_relation_valid_patterns = [
+    ExtRelationValidPattern("occurs_in", ["GO:C","CL","UBERON","EMAPA","WBbt"], [MOLECULAR_FUNCTION,BIOLOGICAL_PROCESS], 1),
+    ExtRelationValidPattern("has_input", ["geneID","CHEBI"], [MOLECULAR_FUNCTION,BIOLOGICAL_PROCESS], 1),
+    ExtRelationValidPattern("has_direct_input", ["geneID","CHEBI"], [MOLECULAR_FUNCTION,BIOLOGICAL_PROCESS], 1),
+    ExtRelationValidPattern("part_of", ["GO:P"], [MOLECULAR_FUNCTION,BIOLOGICAL_PROCESS], 1),
+    ExtRelationValidPattern("has_regulation_target", ["geneID"], [MOLECULAR_FUNCTION,BIOLOGICAL_PROCESS], 1),
+
+    ExtRelationValidPattern("happens_during", ["GO:P"], MOLECULAR_FUNCTION, 1),
+    ExtRelationValidPattern("activated_by", ["CHEBI"], MOLECULAR_FUNCTION, 1),
+    ExtRelationValidPattern("inhibited_by", ["CHEBI"], MOLECULAR_FUNCTION, 1),
+
+    ExtRelationValidPattern("part_of", ["GO:C","CL","UBERON","EMAPA"], CELLULAR_COMPONENT, 1),
+
+    # Specific restrictions
+    ExtRelationValidPattern("results_in_development_of", ["CL", "EMAPA"], "GO:0048856"),
+]
+# Parsing formatted version of David's spreadsheet extensions_list_w_provided_bys_updated_20190328 into more rules
+with open("resources/formatted_ext_patterns.tsv") as rf:
+    rel_reader = csv.reader(rf, delimiter="\t")
+    for rl in rel_reader:
+        relation = rl[0]
+        namespaces = rl[1].split(",")
+        root_terms = rl[2].split(",")
+        ext_pattern = ExtRelationValidPattern(relation, namespaces, root_terms)
+        ext_relation_valid_patterns.append(ext_pattern)
+
+
+def is_valid_ext_pattern(primary_term, ext_relation, ext_namespace, occurence_count):
+    for p in ext_relation_valid_patterns:
+        if p.ext_relation == ext_relation and ext_namespace in p.ext_namespaces and \
+                not (p.max_allowed and occurence_count > p.max_allowed):
+            # Test the crap out of this!
+            #  Rule types:
+            #   max spec'd and count > - PASS
+            #   max spec'd and count <= - PASS
+            #   max not spec'd - PASS
+            # Check ancestors of query term - might take a while
+            all_ancestors = GO_ONTOLOGY.ancestors(primary_term, reflexive=True)
+            is_a_ancestors = GO_ONTOLOGY.subontology(all_ancestors).ancestors(primary_term, relations=["subClassOf"], reflexive=True)
+            # Cache IS_A_ANCESTORS[primary_term] = is_a_ancestors ?
+            # Valid pattern root term is an is_a ancestor of GPAD primary term
+            for t in p.primary_term_roots:
+                if t in is_a_ancestors:
+                    return True
+    return False
+
+# Extension rules - These should live in separate files
 FUNCTION_SINGLES_ONLY = [
     "occurs_in(GO:C)",
     "occurs_in(CL)",
@@ -98,6 +168,7 @@ EXTENSION_RELATION_UNIVERSE.append([
 ])
 
 RO_ONTOLOGY = OntologyFactory().create("http://purl.obolibrary.org/obo/ro.owl")
+GO_ONTOLOGY = OntologyFactory().create("go")
 
 
 gaf_indices = {}
@@ -108,7 +179,7 @@ gpad_indices = {
 class CachedGoAspector(GoAspector):
 
     def __init__(self, cache_filepath):
-        GoAspector.__init__(self, OntologyFactory().create("go"))
+        GoAspector.__init__(self, GO_ONTOLOGY)
         self.cache_filepath = cache_filepath
         self.aspect_lookup = {
             "F": [],
@@ -230,7 +301,17 @@ def is_nested_occurs_in_grouping(extensions_list):
     #
     do_stuff = 1
 
-def following_rules(extension_list, aspect):
+class ExtensionValidityCheckResult:
+    def __init__(self, is_valid, reason=None, offending_extension=None):
+        self.is_valid = is_valid
+        self.reason = reason
+        self.offending_extension = offending_extension
+
+    def __nonzero__(self):
+        return self.is_valid
+
+
+def following_rules(extension_list, aspect, term):
     ext_counts = {}
     for e in extension_list:
         if e in ext_counts:
@@ -238,69 +319,25 @@ def following_rules(extension_list, aspect):
         else:
             ext_counts[e] = 1
 
-    # function_singles_only = [
-    #     "occurs_in(GO:C)",
-    #     "occurs_in(CL)",
-    #     "occurs_in(UBERON)",
-    #     "occurs_in(EMAPA)",
-    #     "has_input(geneID)",
-    #     "has_input(CHEBI)",
-    #     "has_direct_input(geneID)",
-    #     "has_direct_input(CHEBI)",
-    #     "happens_during(GO:P)",
-    #     "part_of(GO:P)",
-    #     "has_regulation_target(geneID)",
-    #     "activated_by(CHEBI)",
-    #     "inhibited_by(CHEBI)"
-    # ]
-    # component_singles_only = [
-    #     "part_of(GO:C)",
-    #     "part_of(CL)",
-    #     "part_of(UBERON)",
-    #     "part_of(EMAPA)"
-    # ]
-    # process_singles_only = [
-    #     "occurs_in(GO:C)",
-    #     "occurs_in(CL)",
-    #     "occurs_in(UBERON)",
-    #     "occurs_in(EMAPA)",
-    #     "has_input(geneID)",
-    #     "has_input(CHEBI)",
-    #     "has_direct_input(geneID)",
-    #     "has_direct_input(CHEBI)",
-    #     "part_of(GO:P)"
-    # ]
+    for ek in ext_counts.keys():
+        if not is_valid_ext_pattern(term, *get_relation_and_term(ek), ext_counts[ek]):
+            # return False
+            # Pack this into Error class
+            return ExtensionValidityCheckResult(is_valid=False, offending_extension=ek)
+
     combos_to_check_for = [
         ["occurs_in(UBERON)", "occurs_in(EMAPA)"]
     ]
-    if aspect == "F":
-        for s in FUNCTION_SINGLES_ONLY:
-            if s in ext_counts and ext_counts[s] > 1:
-                return False
-        for ek in ext_counts.keys():
-            if ek not in FUNCTION_SINGLES_ONLY:
-                return False    # unrecognised relation-term combo
+    if aspect in ["F","P"]:
         combos_to_check_for.append(["has_input(geneID)", "has_input(CHEBI)",
                                     "has_direct_input(geneID)", "has_direct_input(CHEBI)"])
-    if aspect == "C":
-        for s in COMPONENT_SINGLES_ONLY:
-            if s in ext_counts and ext_counts[s] > 1:
-                return False
-        for ek in ext_counts.keys():
-            if ek not in COMPONENT_SINGLES_ONLY:
-                return False    # unrecognised relation-term combo
-    if aspect == "P":
-        for s in PROCESS_SINGLES_ONLY:
-            if s in ext_counts and ext_counts[s] > 1:
-                return False
-        for ek in ext_counts.keys():
-            if ek not in PROCESS_SINGLES_ONLY:
-                return False    # unrecognised relation-term combo
-        combos_to_check_for.append(["has_input(geneID)", "has_input(CHEBI)",
-                                    "has_direct_input(geneID)", "has_direct_input(CHEBI)"])
+    # Only allow 1 occurrence each of combos_to_check_for
     if violates_combo_rule(ext_counts, combos_to_check_for, 1):
-        return False
-    return True
+        # return False
+        return ExtensionValidityCheckResult(is_valid=False, reason="violates_combo_rule")
+
+    # return True
+    return ExtensionValidityCheckResult(is_valid=True)
 
 
 def filter_no_rules_broken(annots):
@@ -354,7 +391,7 @@ class ExtensionsMapper():
     # Do we need this? Does this work? WE TOTALLY NEED THIS!!! At least maybe as an entry point to find what bucket an
     # annotation falls in.
     # HANDLE ASSOCIATION OBJECT_EXTENSIONS STRUCTURE
-    def annot_following_rules(self, annot, aspect):
+    def annot_following_rules(self, annot, aspect, term):
         ext_list = []
         #TODO for a in annot.split("|"):
         # extensions = annot.split(",")
@@ -363,7 +400,7 @@ class ExtensionsMapper():
         ext_list = self.extensions_list(annot)
         # Standardize key - ex:
         #   ["part_of(GO:aspect),part_of(UBERON:)"]
-        return following_rules(ext_list, aspect)
+        return following_rules(ext_list, aspect, term)
 
     def dedupe_extensions(self, extensions):
         new_extensions = []
@@ -400,6 +437,7 @@ if __name__ == "__main__":
             filter_name = os.path.basename(os.path.splitext(gpad_fname)[0]).upper()
         return filter_name
 
+    bad_extensions = []
 
     # filenames = []
     # Use dict for holding different FilterRules for each file
@@ -477,8 +515,11 @@ if __name__ == "__main__":
                 # }
                 for onto_ext in ontobio_extensions:
                     ext_list = extensions_mapper.extensions_list(onto_ext['intersection_of'], g)
-                    if not following_rules(ext_list, aspect):
+                    check_ext_result = following_rules(ext_list, aspect, go_term)
+                    if not check_ext_result.is_valid:
                         ext_key = ",".join(ext_list)
+                        # TODO: Include offending extension relation
+                        bad_extensions.append([":".join(g[0:1]), go_term, GO_ONTOLOGY.label(go_term), check_ext_result.offending_extension, g[10]])
                         if ext_key not in ext_dict[aspect]:
                             ext_dict[aspect][ext_key] = [g]
                         elif g not in ext_dict[aspect][ext_key]:
@@ -615,3 +656,9 @@ if __name__ == "__main__":
                     # de_writer.writerow(["{}({})".format(rel, prefix), len(DISTINCT_EXTENSIONS[rel][prefix]), line_count])
                 line_count = len(distinct_lines)
                 de_writer.writerow([rel, ",".join(DISTINCT_EXTENSIONS[rel].keys()), usage_count, line_count, ro_rel])
+
+    with open("bad_extensions.tsv", "w+") as bef:
+        be_writer = csv.writer(bef, delimiter="\t")
+        be_writer.writerow(["DB Object", "Primary term", "Label", "Offending extension", "Full extensions"])
+        for be in bad_extensions:
+            be_writer.writerow(be)
