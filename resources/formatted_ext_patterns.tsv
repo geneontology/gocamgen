@@ -15,7 +15,7 @@ regulates_o_has_participant	EMAPA,geneID,CL,CHEBI	GO:0008150
 results_in_formation_of	EMAPA	GO:0048646
 regulates_o_has_agent	CL	GO:0008150
 regulates_o_has_agent	geneID	GO:0060284,GO:0003674
-acts_on_population_of	CL	GO:0008283
+acts_on_population_of	CL	GO:0008283,GO:0098727,GO:0048872
 acts_on_population_of	EMAPA	GO:0008150
 results_in_movement_of	CL	GO:0016477
 results_in_movement_of	geneID	GO:0008150
