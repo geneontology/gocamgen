@@ -518,8 +518,7 @@ if __name__ == "__main__":
                     check_ext_result = following_rules(ext_list, aspect, go_term)
                     if not check_ext_result.is_valid:
                         ext_key = ",".join(ext_list)
-                        # TODO: Include offending extension relation
-                        bad_extensions.append([":".join(g[0:1]), go_term, GO_ONTOLOGY.label(go_term), check_ext_result.offending_extension, g[10]])
+                        bad_extensions.append([":".join(g[0:2]), go_term, GO_ONTOLOGY.label(go_term), check_ext_result.offending_extension, g[10]])
                         if ext_key not in ext_dict[aspect]:
                             ext_dict[aspect][ext_key] = [g]
                         elif g not in ext_dict[aspect][ext_key]:
