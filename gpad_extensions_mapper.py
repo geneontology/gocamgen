@@ -85,7 +85,7 @@ with open("resources/formatted_ext_patterns.tsv") as rf:
         namespaces = rl[1].split(",")
         root_terms = rl[2].split(",")
         max_allowed = None
-        if len(rl) >= 4:
+        if len(rl[3]) > 0:
             max_allowed = int(rl[3])
         ext_pattern = ExtRelationValidPattern(relation, namespaces, root_terms, max_allowed=max_allowed)
         ext_relation_valid_patterns.append(ext_pattern)
@@ -505,7 +505,10 @@ if __name__ == "__main__":
                     check_ext_result = following_rules(ext_list, aspect, go_term)
                     if not check_ext_result.is_valid:
                         ext_key = ",".join(ext_list)
-                        bad_extensions.append([":".join(g[0:2]), go_term, GO_ONTOLOGY.label(go_term), check_ext_result.offending_extension, g[10]])
+                        offending_extension = check_ext_result.offending_extension
+                        if offending_extension is None:
+                            offending_extension = check_ext_result.reason
+                        bad_extensions.append([":".join(g[0:2]), go_term, GO_ONTOLOGY.label(go_term), offending_extension, g[10]])
                         if ext_key not in ext_dict[aspect]:
                             ext_dict[aspect][ext_key] = [g]
                         elif g not in ext_dict[aspect][ext_key]:
