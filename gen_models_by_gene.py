@@ -26,11 +26,14 @@ parser.add_argument('-m', '--mod', help="MOD rules to follow for filtering and t
 parser.add_argument('-d', '--output_directory', help="Directory to output model ttl files to")
 parser.add_argument('-r', '--report', help="Generate report", action="store_const", const=True)
 
+# GoCamInputHandler
 
+# class GoCamGPADInputHandler(GoCamInputHandler):
 class GoCamBuilder:
     def __init__(self):
         self.ext_mapper = ExtensionsMapper()
         self.ro_ontology = OntologyFactory().create("http://purl.obolibrary.org/obo/ro.owl")
+        self.gorel_ontology = OntologyFactory().create("http://release.geneontology.org/2019-03-18/ontology/extensions/gorel.obo")
         # Can't get logical_definitions w/ ont.create("go"), need to load ontology via PURL
         self.go_ontology = OntologyFactory().create("http://purl.obolibrary.org/obo/go.owl")
 
@@ -39,6 +42,7 @@ class GoCamBuilder:
         model.extensions_mapper = self.ext_mapper
         model.ontology = self.go_ontology
         model.ro_ontology = self.ro_ontology
+        model.gorel_ontology = self.gorel_ontology
         model.translate()
 
         return model
