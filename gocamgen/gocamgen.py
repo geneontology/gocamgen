@@ -445,8 +445,8 @@ class AssocGoCamModel(GoCamModel):
                     annot_subgraph = self.translate_primary_annotation(a)
 
                     intersection_extensions = self.extensions_mapper.dedupe_extensions(uo['intersection_of'])
-                    # is_cool = self.extensions_mapper.annot_following_rules(intersection_extensions, aspect)
-                    is_cool = True  # Open the flood gates
+                    is_cool = self.extensions_mapper.annot_following_rules(intersection_extensions, aspect, term)
+                    # is_cool = True  # Open the flood gates
                     if is_cool:
                         logger.debug("GOOD: {}".format(ext_str))
                         for rel in intersection_extensions:
