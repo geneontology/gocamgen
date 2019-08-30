@@ -181,7 +181,7 @@ class GoCamModel():
         "acts_upstream_of_positive_effect": "RO:0004034",
         "acts upstream of, negative effect": "RO:0004035",
         "acts_upstream_of_or_within_negative_effect": "RO:0004033",
-        "acts_upstream_of_or_within_positive_effect": "RO:0004032"
+        "acts_upstream_of_or_within_positive_effect": "RO:0004032",
     }
 
     def __init__(self, modeltitle, connection_relations=None):
@@ -558,7 +558,12 @@ class AssocGoCamModel(GoCamModel):
                 # TODO: should check that existing axiom/triple isn't connected to anything else; length matches exactly
                 enabled_by_n = annot_subgraph.add_instance_of_class(gp_id)
                 term_n = annot_subgraph.add_instance_of_class(term, is_anchor=True)
-                annot_subgraph.add_edge(enabled_by_n, self.relations_dict[q], term_n)
+                # annot_subgraph.add_edge(enabled_by_n, self.relations_dict[q], term_n)
+                if q not in self.relations_dict:
+                    relation = self.translate_relation_to_ro(q)
+                else:
+                    relation = self.relations_dict[q]
+                annot_subgraph.add_edge(enabled_by_n, relation, term_n)
 
         with_froms = annotation.with_from()
         if with_froms:
