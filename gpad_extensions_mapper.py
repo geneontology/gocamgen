@@ -7,11 +7,13 @@ from ontobio.ecomap import EcoMap
 from ontobio.util.go_utils import GoAspector
 from ontobio.rdfgen.assoc_rdfgen import prefix_context
 from filter_rule import *
+from gocamgen.collapsed_assoc import extract_properties
 import json
 import csv
 import os
 import argparse
 import logging
+import datetime
 from pathlib import Path
 
 DISTINCT_EXTENSIONS = {}
@@ -52,6 +54,15 @@ acceptable_evidence_codes = [
     "IEP"
 ]
 ecomap = EcoMap()
+
+
+def date_fname(fname):
+    date_str = datetime.date.today().isoformat()
+    fname_and_ext = os.path.splitext(fname)
+    new_fname = fname_and_ext[0]
+    new_fname += "_{}".format(date_str.replace("-", ""))
+    new_fname += fname_and_ext[1]
+    return new_fname
 
 class ExtRelationPattern:
     def __init__(self, ext_relation, ext_namespaces, primary_term_roots=None, max_allowed=None):
@@ -262,6 +273,9 @@ def filter_rule_validate_lines(annots, assoc_filter):
         if len(parse_result.associations) > 0:
             # Right now, GpadParser only returns 0 or 1 associations
             assoc = parse_result.associations[0]
+            assoc = extract_properties(assoc)
+            if "annotation_properties" in assoc:
+                a.append(assoc["annotation_properties"])
             if assoc_filter.validate_line(assoc):
                 filtered.append(a)
     return filtered
@@ -646,7 +660,8 @@ if __name__ == "__main__":
                 line_count = len(distinct_lines)
                 de_writer.writerow([rel, ",".join(DISTINCT_EXTENSIONS[rel].keys()), usage_count, line_count, ro_rel])
 
-    with open("bad_extensions.tsv", "w+") as bef:
+    bad_extensions_fname = date_fname("bad_extensions.tsv")
+    with open(bad_extensions_fname, "w+") as bef:
         be_writer = csv.writer(bef, delimiter="\t")
         be_writer.writerow(["DB Object", "Primary term", "Label", "Offending extension", "Full extensions"])
         for be in bad_extensions:

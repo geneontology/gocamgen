@@ -167,17 +167,21 @@ def get_with_froms(annot):
     return with_from_ds
 
 
+def extract_properties_from_string(prop_col):
+    props = prop_col.split("|")
+    props_dict = {}
+    for p in props:
+        k, v = p.split("=")
+        if k in props_dict:
+            props_dict[k].append(v)
+        else:
+            props_dict[k] = [v]
+    return props_dict
+
+
 def extract_properties(annot):
     cols = annot["source_line"].rstrip().split("\t")
     if len(cols) >= 12:
         prop_col = cols[11]
-        props = prop_col.split("|")
-        props_dict = {}
-        for p in props:
-            k, v = p.split("=")
-            if k in props_dict:
-                props_dict[k].append(v)
-            else:
-                props_dict[k] = [v]
-        annot["annotation_properties"] = props_dict
+        annot["annotation_properties"] = extract_properties_from_string(prop_col)
     return annot
