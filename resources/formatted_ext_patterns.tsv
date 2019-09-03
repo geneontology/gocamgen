@@ -57,6 +57,7 @@ part_of	CL,WBbt	GO:0010453
 part_of	EMAPA,UBERON,WBbt	GO:0008150,GO:0003674	
 results_in_specification_of	CL,WBbt	GO:0001708	
 results_in_specification_of	EMAPA,UBERON,WBbt	GO:1903429	
+negatively_regulates	geneID	GO:0008150,GO:0003674	
 negatively_regulates	GO:P	GO:0008150	
 negatively_regulates	GO:F	GO:0005488	
 regulates	GO:P	GO:0008150	
@@ -83,6 +84,7 @@ enabled_by	geneID	GO:0008150,GO:0003674
 has_target_end_location	geneID,GO:C	GO:0008150	
 positively_regulates	geneID	GO:0008150,GO:0003674	
 positively_regulates	GO:P	GO:0008150	
+positively_regulates	GO:F	GO:0005488	
 regulates_level_of	geneID	GO:0008150	
 in_presence_of	geneID	GO:0008150	
 in_presence_of	CHEBI	GO:0003674	
