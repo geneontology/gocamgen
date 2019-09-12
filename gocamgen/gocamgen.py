@@ -19,6 +19,7 @@ from triple_pattern_finder import TriplePattern, TriplePatternFinder, TriplePair
 from rdflib_sparql_wrapper import RdflibSparqlWrapper
 from gocamgen.subgraphs import AnnotationSubgraph
 from gocamgen.collapsed_assoc import CollapsedAssociationSet, CollapsedAssociation, get_annot_extensions
+from utils import sort_terms_by_ontology_specificity
 
 # logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -436,6 +437,7 @@ class AssocGoCamModel(GoCamModel):
 
                 # TODO: Handle deduping in collapsed_assoc
                 annotation_extensions['union_of'] = self.extensions_mapper.dedupe_extensions(annotation_extensions['union_of'])
+                
                 for uo in annotation_extensions['union_of']:
                     int_bits = []
                     for rel in uo["intersection_of"]:
@@ -449,6 +451,23 @@ class AssocGoCamModel(GoCamModel):
                     # is_cool = True  # Open the flood gates
                     if is_cool:
                         logger.debug("GOOD: {}".format(ext_str))
+                        occurs_in_exts = [ext for ext in intersection_extensions if ext["property"] == "occurs_in"]
+                        if len(occurs_in_exts) > 1:
+                            # Sort by specific term to general term
+                            sorted_occurs_in_terms = sort_terms_by_ontology_specificity([oie["filler"] for oie in occurs_in_exts])
+                            # Translate
+                            for idx, oi_term in enumerate(sorted_occurs_in_terms):
+                                if idx == 0:
+                                    location_relation = "BFO:0000066"  # occurs_in
+                                    loc_subj_n = annot_subgraph.get_anchor()
+                                if idx > 0:
+                                    location_relation = "BFO:0000050"  # part_of
+                                loc_obj_n = annot_subgraph.add_instance_of_class(oi_term)
+                                annot_subgraph.add_edge(loc_subj_n, location_relation, loc_obj_n)
+
+                                loc_subj_n = loc_obj_n  # For next iteration
+                            # Remove from intersection_extensions
+                            [intersection_extensions.remove(ext) for ext in occurs_in_exts]
                         for rel in intersection_extensions:
                             ext_relation = rel["property"]
                             ext_target = rel["filler"]

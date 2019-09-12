@@ -202,6 +202,9 @@ class TestGoCamModel(unittest.TestCase):
 
     def test_occurs_in_cardinality(self):
         # Check for how many assertion individuals have more than 1 occurs_in extension translated
+        model = self.gen_model(gpad_file="resources/test/mgi.gpa.MGI_1336882_occurs_in", test_gene="MGI:MGI:1336882",
+                               filter_rule=MGIFilterRule())
+
         self.assertEqual(1, 1)
 
     def test_with_from_evidence(self):
