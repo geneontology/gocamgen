@@ -1,8 +1,9 @@
 RELATION	ACCEPTABLE_NAMESPACES	ACCEPTABLE_PRIMARY_TERM_ROOTS	MAX_ALLOWED
 occurs_in	GO:C,CL,UBERON,EMAPA,WBbt	GO:0003674,GO:0008150	1
-has_input	geneID,CHEBI	GO:0003674,GO:0008150	1
+has_input	geneID,CHEBI	GO:0008150	1
+has_input	geneID,CHEBI	GO:0003674	
 has_direct_input	geneID,CHEBI	GO:0003674,GO:0008150	1
-part_of	GO:P	GO:0003674,GO:000815	1
+part_of	GO:P,GO:F	GO:0003674,GO:0008150	1
 has_regulation_target	geneID	GO:0003674,GO:0008150	1
 happens_during	GO:P,WBls	GO:0003674,GO:0008150	1
 activated_by	CHEBI	GO:0003674	1
@@ -56,7 +57,11 @@ part_of	CL,WBbt	GO:0010453
 part_of	EMAPA,UBERON,WBbt	GO:0008150,GO:0003674	
 results_in_specification_of	CL,WBbt	GO:0001708	
 results_in_specification_of	EMAPA,UBERON,WBbt	GO:1903429	
+negatively_regulates	geneID	GO:0008150,GO:0003674	
 negatively_regulates	GO:P	GO:0008150	
+negatively_regulates	GO:F	GO:0005488	
+regulates	GO:P	GO:0008150	
+regulates	GO:F	GO:0003674	
 regulates_o_results_in_morphogenesis_of	EMAPA,UBERON,WBbt	GO:0022603	
 regulates_o_results_in_morphogenesis_of	CL,WBbt	GO:0022604	
 happens_during	GO:P,WBls	GO:0008150	
@@ -79,6 +84,7 @@ enabled_by	geneID	GO:0008150,GO:0003674
 has_target_end_location	geneID,GO:C	GO:0008150	
 positively_regulates	geneID	GO:0008150,GO:0003674	
 positively_regulates	GO:P	GO:0008150	
+positively_regulates	GO:F	GO:0005488	
 regulates_level_of	geneID	GO:0008150	
 in_presence_of	geneID	GO:0008150	
 in_presence_of	CHEBI	GO:0003674	
