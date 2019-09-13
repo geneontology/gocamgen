@@ -79,3 +79,34 @@ class RdflibSparqlWrapper:
         """.format(annotated_source=annotated_source, annotated_property=annotated_property, annotated_target=annotated_target)
         res = self.run_query(graph, query)
         return res
+
+    def find_nested_location_chain(self, graph, *nested_terms):
+        # nested_terms - Ordered list of chain elements
+        # Will look for chain of 'MF:root-occurs_in->term1-part_of->term2-part_of->term3-part_of->...'
+        select_fields = []
+        type_declarations = []
+        location_edges = []
+        type_declaration = "?loc_{} rdf:type {}"
+        location_edge_pattern = "?loc_{} {} ?loc_{}"
+        for idx, term in enumerate(nested_terms):
+            term_ind_idx = idx+1
+            select_fields.append("?loc_{}".format(term_ind_idx))
+            type_declarations.append(type_declaration.format(term_ind_idx, term))
+            edge_relation = "BFO:0000050"  # part_of
+            if term_ind_idx == 1:
+                continue  # ?mf-occurs_in->?loc_1 edge already hard-coded
+            location_edges.append(location_edge_pattern.format(idx, edge_relation, term_ind_idx))
+        # TODO: Allow any MF, not just root
+        query = """
+            SELECT {select_fields}
+            WHERE {{
+                ?mf rdf:type GO:0003674 .
+                {type_declarations} .
+
+                ?mf BFO:0000066 ?loc_1 .
+                {location_edges}
+            }}
+        """.format(select_fields=" ".join(select_fields), type_declarations=" .\n".join(type_declarations),
+                   location_edges=" .\n".join(location_edges))
+        res = self.run_query(graph, query)
+        return res

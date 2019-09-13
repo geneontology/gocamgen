@@ -200,12 +200,24 @@ class TestGoCamModel(unittest.TestCase):
 
         self.assertEqual(len(results), 1)
 
-    def test_occurs_in_cardinality(self):
-        # Check for how many assertion individuals have more than 1 occurs_in extension translated
+    def test_occurs_in_nesting(self):
+        # Generate example of GO:CC->CL->EMAPA nesting
         model = self.gen_model(gpad_file="resources/test/mgi.gpa.MGI_1336882_occurs_in", test_gene="MGI:MGI:1336882",
                                filter_rule=MGIFilterRule())
+        # Look for chain of MF-occurs_in->CC-part_of->CL-part_of->EMAPA
+        sparql_wrapper = RdflibSparqlWrapper()
+        res = sparql_wrapper.find_nested_location_chain(model.graph, "GO:0045178", "CL:0002064", "EMAPA:35651")
+        self.assertEqual(len(res), 1, "No nested chain found in MGI:MGI:1336882 test model")
 
-        self.assertEqual(1, 1)
+        # Split example annotation with extension set of occurs_in(CL),occurs_in(CL),occurs_in(EMAPA) and nest
+        model = self.gen_model(gpad_file="resources/test/mgi.gpa.MGI_1915585", test_gene="MGI:MGI:1915585",
+                               filter_rule=MGIFilterRule())
+        # Look for 2chainz: MF-occurs_in->CL:0000589-part_of->EMAPA:17597 and
+        #                   MF-occurs_in->CL:0000601-part_of->EMAPA:17597
+        res = sparql_wrapper.find_nested_location_chain(model.graph, "CL:0000589", "EMAPA:17597")
+        self.assertEqual(len(res), 1)
+        res = sparql_wrapper.find_nested_location_chain(model.graph, "CL:0000601", "EMAPA:17597")
+        self.assertEqual(len(res), 1)
 
     def test_with_from_evidence(self):
         # Check to ensure with/from values are appropriately added to evidence or translated to has_input edges

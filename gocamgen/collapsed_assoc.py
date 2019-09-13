@@ -95,7 +95,7 @@ class CollapsedAssociation:
 
     def annot_extensions(self):
         if "object_extensions" in self.header:
-            return self.header["object_extensions"]
+            return self.header["object_extensions"].get("union_of")
         return {}
 
     def qualifiers(self):

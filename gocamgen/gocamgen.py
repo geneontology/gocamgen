@@ -428,17 +428,52 @@ class AssocGoCamModel(GoCamModel):
             annotation_extensions = a.annot_extensions()
 
             # Translate extension - maybe add function argument for custom translations?
-            if len(annotation_extensions) == 0:
+            if not annotation_extensions:
                 annot_subgraph = self.translate_primary_annotation(a)
                 # For annots w/o extensions, this is where we write subgraph to model
                 annot_subgraph.write_to_model(self, evidences)
             else:
                 aspect = self.extensions_mapper.go_aspector.go_aspect(term)
 
-                # TODO: Handle deduping in collapsed_assoc
-                annotation_extensions['union_of'] = self.extensions_mapper.dedupe_extensions(annotation_extensions['union_of'])
-                
-                for uo in annotation_extensions['union_of']:
+                # TODO: Handle deduping in collapsed_assoc - need access to extensions_mapper.dedupe_extensions
+                annotation_extensions = self.extensions_mapper.dedupe_extensions(annotation_extensions)
+
+                # Split on those multiple occurs_in(same NS) extensions
+                # TODO: Cleanup/refactor this splitting into separate method
+                extension_sets_to_remove = []
+                for uo in annotation_extensions:
+                    # Grab occurs_in's
+                    # Make a new uo if situation found
+                    occurs_in_exts = [ext for ext in uo['intersection_of'] if ext["property"] == "occurs_in"]
+                    # onto_grouping = {
+                    #     "CL": [{}, {}],
+                    #     "EMAPA": [{}]
+                    # }
+                    onto_grouping = {}
+                    for ext in occurs_in_exts:
+                        ont_prefix = ext["filler"].split(":")[0]
+                        if ont_prefix not in onto_grouping:
+                            onto_grouping[ont_prefix] = []
+                        onto_grouping[ont_prefix].append(ext)
+                    for ont_prefix, exts in onto_grouping.items():
+                        if len(exts) > 1:
+                            if uo not in extension_sets_to_remove:
+                                extension_sets_to_remove.append(uo)  # Remove original set when we're done splitting
+                            for ext in exts:
+                                # Create new 'intersection_of' list
+                                new_exts_list = []
+                                # Add ext to this new list if its prefix is not ont_prefix
+                                for int_of_ext in uo['intersection_of']:
+                                    if int_of_ext["property"] != "occurs_in" or int_of_ext["filler"].split(":")[0] != ont_prefix:
+                                        # Add the extensions that don't currently concern us
+                                        new_exts_list.append(int_of_ext)
+                                # Then add occurs_in ext in current iteration
+                                new_exts_list.append(ext)
+                                annotation_extensions.append({"intersection_of": new_exts_list})
+                # Remove original, un-split extension from list so it isn't translated
+                [annotation_extensions.remove(ext_set) for ext_set in extension_sets_to_remove]
+
+                for uo in annotation_extensions:
                     int_bits = []
                     for rel in uo["intersection_of"]:
                         int_bits.append("{}({})".format(rel["property"], rel["filler"]))

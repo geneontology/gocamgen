@@ -1,0 +1,20 @@
+!gpa-version: 1.1
+!
+!date: 04/03/2019 $
+!
+! from Mouse Genome Database (MGD) & Gene Expression Database (GXD)
+!
+!       1.  DB                       MGI or PR
+!       2.  DB Object ID             MGI:xxxx or xxxxx
+!       3.  Qualifier                enables, causally_upstream_of_or_within, part_of
+!       4.  GO ID                    GO:xxxx
+!       5.  DB:Reference(s)          MGI:MGI:xxxx|PMID:xxxx
+!       6.  Evidence Code            ECO:xxxx
+!       7.  With (or)From            optional
+!       8.  Interacting taxon ID     optional
+!       9.  Date                     YYYYMMDD
+!       10. Assigned By
+!       11. Annotation Extension     optional same as GAF/col 16
+!       12. Annotation Properties    optional
+!
+MGI	MGI:1336882	acts_upstream_of_or_within	GO:0070625	MGI:MGI:3801544|PMID:18535671	ECO:0000315	MGI:MGI:3056083		20160406	MGI	occurs_in(EMAPA:35651),occurs_in(CL:0002064),occurs_in(GO:1990794)|occurs_in(EMAPA:35651),occurs_in(CL:0002064),occurs_in(GO:0045178)	
