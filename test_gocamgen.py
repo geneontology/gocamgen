@@ -113,8 +113,8 @@ class TestGoCamModel(unittest.TestCase):
         model = self.gen_model(gpad_file="resources/test/mgi.gpa.MGI_2159711", test_gene="MGI:MGI:2159711",
                           filter_rule=MGIFilterRule())
 
-        # Look for 'MGI:MGI:2159711 PART_OF GO:0044297'. Should only be one.
-        found_triples = model.triples_by_ids("MGI:MGI:2159711", gocamgen.gocamgen.PART_OF,
+        # Look for 'MGI:MGI:2159711 LOCATED_IN GO:0044297'. Should only be one.
+        found_triples = model.triples_by_ids("MGI:MGI:2159711", gocamgen.gocamgen.LOCATED_IN,
                                              "GO:0044297")
         self.assertEqual(len(found_triples), 1)
 
@@ -201,12 +201,12 @@ class TestGoCamModel(unittest.TestCase):
         self.assertEqual(len(results), 1)
 
     def test_occurs_in_nesting(self):
-        # Generate example of GO:CC->CL->EMAPA nesting
+        # Generate example of GO:CC->CL->EMAPA nesting for MF or BP primary terms
         model = self.gen_model(gpad_file="resources/test/mgi.gpa.MGI_1336882_occurs_in", test_gene="MGI:MGI:1336882",
                                filter_rule=MGIFilterRule())
         # Look for chain of MF-occurs_in->CC-part_of->CL-part_of->EMAPA
         sparql_wrapper = RdflibSparqlWrapper()
-        res = sparql_wrapper.find_nested_location_chain(model.graph, "GO:0045178", "CL:0002064", "EMAPA:35651")
+        res = sparql_wrapper.find_nested_location_chain(model.graph, "MolecularFunction", "GO:0003674", "GO:0045178", "CL:0002064", "EMAPA:35651")
         self.assertEqual(len(res), 1, "No nested chain found in MGI:MGI:1336882 test model")
 
         # Split example annotation with extension set of occurs_in(CL),occurs_in(CL),occurs_in(EMAPA) and nest
@@ -214,10 +214,24 @@ class TestGoCamModel(unittest.TestCase):
                                filter_rule=MGIFilterRule())
         # Look for 2chainz: MF-occurs_in->CL:0000589-part_of->EMAPA:17597 and
         #                   MF-occurs_in->CL:0000601-part_of->EMAPA:17597
-        res = sparql_wrapper.find_nested_location_chain(model.graph, "CL:0000589", "EMAPA:17597")
+        res = sparql_wrapper.find_nested_location_chain(model.graph, "MolecularFunction", "GO:0003674", "CL:0000589", "EMAPA:17597")
         self.assertEqual(len(res), 1)
-        res = sparql_wrapper.find_nested_location_chain(model.graph, "CL:0000601", "EMAPA:17597")
+        res = sparql_wrapper.find_nested_location_chain(model.graph, "MolecularFunction", "GO:0003674", "CL:0000601", "EMAPA:17597")
         self.assertEqual(len(res), 1)
+
+    def test_part_of_nesting(self):
+        # Generate example of GO:CC->CL->EMAPA nesting for CC primary terms
+        model = self.gen_model(gpad_file="resources/test/mgi.gpa.MGI_1336882_part_ofs", test_gene="MGI:MGI:1336882",
+                               filter_rule=MGIFilterRule())
+        sparql_wrapper = RdflibSparqlWrapper()
+        # Look for chain of primaryCC-part_of->CC-part_of->CL-part_of->EMAPA
+        res = sparql_wrapper.find_nested_location_chain(model.graph, "CellularComponent", "GO:0042588", "GO:1990794", "CL:0002064",
+                                                        "EMAPA:35651")
+        self.assertEqual(len(res), 1, "No nested CC-part_of-> chain found in MGI:MGI:1336882 test model")
+
+        # This example has CC primary term SNARE complex, which should affect the GP->primaryCC->CC relations
+        res = sparql_wrapper.find_nested_location_chain(model.graph, "ProteinContainingComplex", "GO:0031201", "GO:0042589", "CL:0002064", "EMAPA:35651")
+        self.assertEqual(len(res), 1, "No nested complex-located_in->part_of-> chain found in MGI:MGI:1336882 test model")
 
     def test_with_from_evidence(self):
         # Check to ensure with/from values are appropriately added to evidence or translated to has_input edges

@@ -491,23 +491,34 @@ class AssocGoCamModel(GoCamModel):
                     # is_cool = True  # Open the flood gates
                     if is_cool:
                         logger.debug("GOOD: {}".format(ext_str))
-                        occurs_in_exts = [ext for ext in intersection_extensions if ext["property"] == "occurs_in"]
-                        if len(occurs_in_exts) > 1:
-                            # Sort by specific term to general term
-                            sorted_occurs_in_terms = sort_terms_by_ontology_specificity([oie["filler"] for oie in occurs_in_exts])
-                            # Translate
-                            for idx, oi_term in enumerate(sorted_occurs_in_terms):
-                                if idx == 0:
-                                    location_relation = "BFO:0000066"  # occurs_in
-                                    loc_subj_n = annot_subgraph.get_anchor()
-                                if idx > 0:
-                                    location_relation = "BFO:0000050"  # part_of
-                                loc_obj_n = annot_subgraph.add_instance_of_class(oi_term)
-                                annot_subgraph.add_edge(loc_subj_n, location_relation, loc_obj_n)
+                        # Nesting repeated extension relations (i.e. occurs_in, part_of)
+                        ext_rels_to_nest = ['occurs_in', 'part_of']  # Switch to turn on/off extension nesting
+                        for ertn in ext_rels_to_nest:
+                            nest_exts = [ext for ext in intersection_extensions if ext["property"] == ertn]
+                            if len(nest_exts) > 1:
+                                # Sort by specific term to general term
+                                sorted_nest_ext_terms = sort_terms_by_ontology_specificity(
+                                    [ne["filler"] for ne in nest_exts])
+                                # Translate
+                                loc_subj_n = annot_subgraph.get_anchor()
+                                for idx, ne_term in enumerate(sorted_nest_ext_terms):
+                                    # location_relation could be part_of, occurs_in, or located_in
+                                    # Figure out what types of classes these are
+                                    # Use case here is matching to ShEx shape class
+                                    subj_shape = SHEX_HELPER.shape_from_class(AnnotationSubgraph.node_class(loc_subj_n),
+                                                                              self.extensions_mapper.go_aspector)
+                                    loc_obj_n = annot_subgraph.add_instance_of_class(ne_term)
+                                    obj_shape = SHEX_HELPER.shape_from_class(ne_term,
+                                                                             self.extensions_mapper.go_aspector)
+                                    # location_relation = "BFO:0000050"  # part_of
+                                    location_relation = SHEX_HELPER.relation_lookup(subj_shape, obj_shape)
+                                    if idx == 0 and ertn == "occurs_in":
+                                        location_relation = "BFO:0000066"  # occurs_in - because MF -> @<AnatomicalEntity> OR @<CellularComponent>
+                                    annot_subgraph.add_edge(loc_subj_n, location_relation, loc_obj_n)
 
-                                loc_subj_n = loc_obj_n  # For next iteration
-                            # Remove from intersection_extensions
-                            [intersection_extensions.remove(ext) for ext in occurs_in_exts]
+                                    loc_subj_n = loc_obj_n  # For next iteration
+                                # Remove from intersection_extensions because this is now already translated
+                                [intersection_extensions.remove(ext) for ext in nest_exts]
                         for rel in intersection_extensions:
                             ext_relation = rel["property"]
                             ext_target = rel["filler"]
