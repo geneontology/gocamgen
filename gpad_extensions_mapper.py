@@ -176,8 +176,10 @@ gpad_indices = {
 
 class CachedGoAspector(GoAspector):
 
-    def __init__(self, cache_filepath):
+    def __init__(self, cache_filepath=None):
         GoAspector.__init__(self, GO_ONTOLOGY)
+        if cache_filepath is None:
+            cache_filepath = "resources/aspect_lookup.json"
         self.cache_filepath = cache_filepath
         self.aspect_lookup = {
             "F": [],

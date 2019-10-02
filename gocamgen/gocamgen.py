@@ -19,7 +19,7 @@ from triple_pattern_finder import TriplePattern, TriplePatternFinder, TriplePair
 from rdflib_sparql_wrapper import RdflibSparqlWrapper
 from gocamgen.subgraphs import AnnotationSubgraph
 from gocamgen.collapsed_assoc import CollapsedAssociationSet, CollapsedAssociation, get_annot_extensions
-from utils import sort_terms_by_ontology_specificity
+from utils import sort_terms_by_ontology_specificity, ShexHelper
 
 # logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -59,6 +59,7 @@ COLOCALIZES_WITH = URIRef(expand_uri_wrapper(ro.colocalizes_with))
 CONTRIBUTES_TO = URIRef(expand_uri_wrapper("RO:0002326"))
 MOLECULAR_FUNCTION = URIRef(expand_uri_wrapper(upt.molecular_function))
 REGULATES = URIRef(expand_uri_wrapper("RO:0002211"))
+LOCATED_IN = URIRef(expand_uri_wrapper("RO:0001025"))
 
 # RO_ONTOLOGY = OntologyFactory().create("http://purl.obolibrary.org/obo/ro.owl")  # Need propertyChainAxioms to parse (https://github.com/biolink/ontobio/issues/312)
 INPUT_RELATIONS = {
@@ -94,6 +95,9 @@ ENABLES_O_RELATION_LOOKUP = {
     "RO:0004034": "RO:0002304",
     "RO:0004035": "RO:0002305"
 }
+
+
+SHEX_HELPER = ShexHelper()
 
 
 def has_regulation_target_bucket(ontology, term):
@@ -183,6 +187,7 @@ class GoCamModel():
         "acts upstream of, negative effect": "RO:0004035",
         "acts_upstream_of_or_within_negative_effect": "RO:0004033",
         "acts_upstream_of_or_within_positive_effect": "RO:0004032",
+        "located_in": "RO:0001025",
     }
 
     def __init__(self, modeltitle, connection_relations=None):
@@ -607,12 +612,15 @@ class AssocGoCamModel(GoCamModel):
                 annot_subgraph.add_edge(mf_n, causally_relation, term_n)
             elif q == "NOT":
                 # Try it in UI and look at OWL
-                do_stuff = 1
+                pass
             else:
                 # TODO: should check that existing axiom/triple isn't connected to anything else; length matches exactly
                 enabled_by_n = annot_subgraph.add_instance_of_class(gp_id)
                 term_n = annot_subgraph.add_instance_of_class(term, is_anchor=True)
                 # annot_subgraph.add_edge(enabled_by_n, self.relations_dict[q], term_n)
+                if q == "part_of" and SHEX_HELPER.shape_from_class(term, self.extensions_mapper.go_aspector) == "CellularComponent":
+                    # Using shex_shape function should exclude AnatomicalEntity from getting located_in
+                    q = "located_in"
                 if q not in self.relations_dict:
                     relation = self.translate_relation_to_ro(q)
                 else:
