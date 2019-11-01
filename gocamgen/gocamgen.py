@@ -571,7 +571,7 @@ class AssocGoCamModel(GoCamModel):
                                             causally_upstream_relation = self.get_causally_upstream_relation(regulates_rel)
                                             # GP-A<-enabled_by-[root MF]-part_of->[regulation of Z]-has_input->GP-B,-causally upstream of (positive/negative effect)->[root MF]-enabled_by->GP-B
                                             ext_target_n = annot_subgraph.add_instance_of_class(ext_target)
-                                            anchor_n = annot_subgraph.get_anchor()
+                                            anchor_n = annot_subgraph.get_anchor()  # TODO: Gotta find MF. MF no longer anchor if primary term is BP
                                             annot_subgraph.add_edge(anchor_n, INPUT_RELATIONS["has input"], ext_target_n)
                                             root_mf_b_n = annot_subgraph.add_instance_of_class(upt.molecular_function)
                                             annot_subgraph.add_edge(anchor_n, causally_upstream_relation, root_mf_b_n)
