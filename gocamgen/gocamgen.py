@@ -608,17 +608,21 @@ class AssocGoCamModel(GoCamModel):
                 enabled_by_n = annot_subgraph.add_instance_of_class(gp_id)
                 annot_subgraph.add_edge(term_n, "RO:0002333", enabled_by_n)
             elif q == "involved_in":
-                mf_n = annot_subgraph.add_instance_of_class(upt.molecular_function, is_anchor=True)
+                # mf_n = annot_subgraph.add_instance_of_class(upt.molecular_function, is_anchor=True)
+                mf_n = annot_subgraph.add_instance_of_class(upt.molecular_function)
                 enabled_by_n = annot_subgraph.add_instance_of_class(gp_id)
-                term_n = annot_subgraph.add_instance_of_class(term)
+                # term_n = annot_subgraph.add_instance_of_class(term)
+                term_n = annot_subgraph.add_instance_of_class(term, is_anchor=True)
                 annot_subgraph.add_edge(mf_n, "RO:0002333", enabled_by_n)
                 annot_subgraph.add_edge(mf_n, "BFO:0000050", term_n)
             elif q in ACTS_UPSTREAM_OF_RELATIONS:
                 # Look for existing GP <- enabled_by [root MF] -> causally_upstream_of BP
                 causally_relation = ENABLES_O_RELATION_LOOKUP[ACTS_UPSTREAM_OF_RELATIONS[q]]
-                mf_n = annot_subgraph.add_instance_of_class(upt.molecular_function, is_anchor=True)
+                # mf_n = annot_subgraph.add_instance_of_class(upt.molecular_function, is_anchor=True)
+                mf_n = annot_subgraph.add_instance_of_class(upt.molecular_function)
                 enabled_by_n = annot_subgraph.add_instance_of_class(gp_id)
-                term_n = annot_subgraph.add_instance_of_class(term)
+                # term_n = annot_subgraph.add_instance_of_class(term)
+                term_n = annot_subgraph.add_instance_of_class(term, is_anchor=True)
                 annot_subgraph.add_edge(mf_n, "RO:0002333", enabled_by_n)
                 annot_subgraph.add_edge(mf_n, causally_relation, term_n)
             elif q == "NOT":
