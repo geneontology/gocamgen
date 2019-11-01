@@ -206,19 +206,19 @@ class TestGoCamModel(unittest.TestCase):
         # Generate example of GO:CC->CL->EMAPA nesting for MF or BP primary terms
         model = self.gen_model(gpad_file="resources/test/mgi.gpa.MGI_1336882_occurs_in", test_gene="MGI:MGI:1336882",
                                filter_rule=MGIFilterRule())
-        # Look for chain of MF-occurs_in->CC-part_of->CL-part_of->EMAPA
+        # Look for chain of BP-occurs_in->CC-part_of->CL-part_of->EMAPA
         sparql_wrapper = RdflibSparqlWrapper()
-        res = sparql_wrapper.find_nested_location_chain(model.graph, "MolecularFunction", "GO:0003674", "GO:0045178", "CL:0002064", "EMAPA:35651")
+        res = sparql_wrapper.find_nested_location_chain(model.graph, "BiologicalProcess", "GO:0070625", "GO:0045178", "CL:0002064", "EMAPA:35651")
         self.assertEqual(len(res), 1, "No nested chain found in MGI:MGI:1336882 test model")
 
         # Split example annotation with extension set of occurs_in(CL),occurs_in(CL),occurs_in(EMAPA) and nest
         model = self.gen_model(gpad_file="resources/test/mgi.gpa.MGI_1915585", test_gene="MGI:MGI:1915585",
                                filter_rule=MGIFilterRule())
-        # Look for 2chainz: MF-occurs_in->CL:0000589-part_of->EMAPA:17597 and
-        #                   MF-occurs_in->CL:0000601-part_of->EMAPA:17597
-        res = sparql_wrapper.find_nested_location_chain(model.graph, "MolecularFunction", "GO:0003674", "CL:0000589", "EMAPA:17597")
+        # Look for 2chainz: BP-occurs_in->CL:0000589-part_of->EMAPA:17597 and
+        #                   BP-occurs_in->CL:0000601-part_of->EMAPA:17597
+        res = sparql_wrapper.find_nested_location_chain(model.graph, "BiologicalProcess", "GO:0090102", "CL:0000589", "EMAPA:17597")
         self.assertEqual(len(res), 1)
-        res = sparql_wrapper.find_nested_location_chain(model.graph, "MolecularFunction", "GO:0003674", "CL:0000601", "EMAPA:17597")
+        res = sparql_wrapper.find_nested_location_chain(model.graph, "BiologicalProcess", "GO:0090102", "CL:0000601", "EMAPA:17597")
         self.assertEqual(len(res), 1)
 
     def test_part_of_nesting(self):
