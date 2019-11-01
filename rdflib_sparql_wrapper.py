@@ -79,3 +79,38 @@ class RdflibSparqlWrapper:
         """.format(annotated_source=annotated_source, annotated_property=annotated_property, annotated_target=annotated_target)
         res = self.run_query(graph, query)
         return res
+
+    def find_nested_location_chain(self, graph, primary_term_shape, *nested_terms):
+        # nested_terms - Ordered list of chain elements including anchor term (e.g. root MF, primary CC)
+        # Will look for chain of 'MF:root-occurs_in->term1-part_of->term2-part_of->term3-part_of->...'
+        select_fields = []
+        type_declarations = []
+        location_edges = []
+        type_declaration = "?loc_{} rdf:type {}"
+        location_edge_pattern = "?loc_{} {} ?loc_{}"
+        for idx, term in enumerate(nested_terms):
+            term_ind_idx = idx+1
+            select_fields.append("?loc_{}".format(term_ind_idx))
+            type_declarations.append(type_declaration.format(term_ind_idx, term))
+            edge_relation = "BFO:0000050"  # part_of
+            # Here we use aspect to determine first edge_relation
+            # This aspect param is a lazy hack because I haven't figured out how to do this directly in SPARQL
+            if term_ind_idx == 1:
+                if primary_term_shape in ["MolecularFunction", "BiologicalProcess"]:
+                    edge_relation = "BFO:0000066"  # occurs_in
+                elif primary_term_shape == "ProteinContainingComplex":
+                    edge_relation = "RO:0001025"  # located_in
+            if term_ind_idx < len(nested_terms):
+                location_edges.append(location_edge_pattern.format(term_ind_idx, edge_relation, term_ind_idx+1))
+        query = """
+            SELECT {select_fields}
+            WHERE {{
+                {type_declarations} .
+
+                {location_edges}
+            }}
+        """.format(select_fields=" ".join(select_fields), type_declarations=" .\n".join(type_declarations),
+                   location_edges=" .\n".join(location_edges))
+        # print(query)
+        res = self.run_query(graph, query)
+        return res

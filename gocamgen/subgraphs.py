@@ -80,7 +80,7 @@ class AnnotationSubgraph(MultiDiGraph):
     def generate_sparql_representation(self):
         conditions = []
         for n in self:
-            type_declaration = "?{} rdf:type {}".format(self.node_sparql_variable(n), node_class(n))
+            type_declaration = "?{} rdf:type {}".format(self.node_sparql_variable(n), self.node_class(n))
             conditions.append(type_declaration)
         # TODO: Check that order of assertion triples in SPARQL doesn't affect result
         for u, v, relation in self.edges(data="relation"):
@@ -144,11 +144,11 @@ class AnnotationSubgraph(MultiDiGraph):
             for u, v, relation in self.edges(data="relation"):
                 subject_instance_iri = self.node_instance_iri(u)
                 if subject_instance_iri is None:
-                    subject_instance_iri = model.declare_individual(node_class(u))
+                    subject_instance_iri = model.declare_individual(self.node_class(u))
                     self.nodes[u]["instance_iri"] = subject_instance_iri
                 object_instance_iri = self.node_instance_iri(v)
                 if object_instance_iri is None:
-                    object_instance_iri = model.declare_individual(node_class(v))
+                    object_instance_iri = model.declare_individual(self.node_class(v))
                     self.nodes[v]["instance_iri"] = object_instance_iri
                 relation_uri = expand_uri_wrapper(relation)
                 axiom_ids.append(model.add_axiom(model.writer.emit(subject_instance_iri,
@@ -160,5 +160,6 @@ class AnnotationSubgraph(MultiDiGraph):
                 model.add_evidence(axiom_id, evidence)
 
 
-def node_class(node):
-    return "-".join(node.split("-")[0:-1])
+    @staticmethod
+    def node_class(node):
+        return "-".join(node.split("-")[0:-1])

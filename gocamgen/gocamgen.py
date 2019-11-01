@@ -19,6 +19,7 @@ from triple_pattern_finder import TriplePattern, TriplePatternFinder, TriplePair
 from rdflib_sparql_wrapper import RdflibSparqlWrapper
 from gocamgen.subgraphs import AnnotationSubgraph
 from gocamgen.collapsed_assoc import CollapsedAssociationSet, CollapsedAssociation, get_annot_extensions
+from utils import sort_terms_by_ontology_specificity, ShexHelper
 
 # logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -58,6 +59,7 @@ COLOCALIZES_WITH = URIRef(expand_uri_wrapper(ro.colocalizes_with))
 CONTRIBUTES_TO = URIRef(expand_uri_wrapper("RO:0002326"))
 MOLECULAR_FUNCTION = URIRef(expand_uri_wrapper(upt.molecular_function))
 REGULATES = URIRef(expand_uri_wrapper("RO:0002211"))
+LOCATED_IN = URIRef(expand_uri_wrapper("RO:0001025"))
 
 # RO_ONTOLOGY = OntologyFactory().create("http://purl.obolibrary.org/obo/ro.owl")  # Need propertyChainAxioms to parse (https://github.com/biolink/ontobio/issues/312)
 INPUT_RELATIONS = {
@@ -93,6 +95,9 @@ ENABLES_O_RELATION_LOOKUP = {
     "RO:0004034": "RO:0002304",
     "RO:0004035": "RO:0002305"
 }
+
+
+SHEX_HELPER = ShexHelper()
 
 
 def has_regulation_target_bucket(ontology, term):
@@ -182,6 +187,7 @@ class GoCamModel():
         "acts upstream of, negative effect": "RO:0004035",
         "acts_upstream_of_or_within_negative_effect": "RO:0004033",
         "acts_upstream_of_or_within_positive_effect": "RO:0004032",
+        "located_in": "RO:0001025",
     }
 
     def __init__(self, modeltitle, connection_relations=None):
@@ -427,16 +433,52 @@ class AssocGoCamModel(GoCamModel):
             annotation_extensions = a.annot_extensions()
 
             # Translate extension - maybe add function argument for custom translations?
-            if len(annotation_extensions) == 0:
+            if not annotation_extensions:
                 annot_subgraph = self.translate_primary_annotation(a)
                 # For annots w/o extensions, this is where we write subgraph to model
                 annot_subgraph.write_to_model(self, evidences)
             else:
                 aspect = self.extensions_mapper.go_aspector.go_aspect(term)
 
-                # TODO: Handle deduping in collapsed_assoc
-                annotation_extensions['union_of'] = self.extensions_mapper.dedupe_extensions(annotation_extensions['union_of'])
-                for uo in annotation_extensions['union_of']:
+                # TODO: Handle deduping in collapsed_assoc - need access to extensions_mapper.dedupe_extensions
+                annotation_extensions = self.extensions_mapper.dedupe_extensions(annotation_extensions)
+
+                # Split on those multiple occurs_in(same NS) extensions
+                # TODO: Cleanup/refactor this splitting into separate method
+                extension_sets_to_remove = []
+                for uo in annotation_extensions:
+                    # Grab occurs_in's
+                    # Make a new uo if situation found
+                    occurs_in_exts = [ext for ext in uo['intersection_of'] if ext["property"] == "occurs_in"]
+                    # onto_grouping = {
+                    #     "CL": [{}, {}],
+                    #     "EMAPA": [{}]
+                    # }
+                    onto_grouping = {}
+                    for ext in occurs_in_exts:
+                        ont_prefix = ext["filler"].split(":")[0]
+                        if ont_prefix not in onto_grouping:
+                            onto_grouping[ont_prefix] = []
+                        onto_grouping[ont_prefix].append(ext)
+                    for ont_prefix, exts in onto_grouping.items():
+                        if len(exts) > 1:
+                            if uo not in extension_sets_to_remove:
+                                extension_sets_to_remove.append(uo)  # Remove original set when we're done splitting
+                            for ext in exts:
+                                # Create new 'intersection_of' list
+                                new_exts_list = []
+                                # Add ext to this new list if its prefix is not ont_prefix
+                                for int_of_ext in uo['intersection_of']:
+                                    if int_of_ext["property"] != "occurs_in" or int_of_ext["filler"].split(":")[0] != ont_prefix:
+                                        # Add the extensions that don't currently concern us
+                                        new_exts_list.append(int_of_ext)
+                                # Then add occurs_in ext in current iteration
+                                new_exts_list.append(ext)
+                                annotation_extensions.append({"intersection_of": new_exts_list})
+                # Remove original, un-split extension from list so it isn't translated
+                [annotation_extensions.remove(ext_set) for ext_set in extension_sets_to_remove]
+
+                for uo in annotation_extensions:
                     int_bits = []
                     for rel in uo["intersection_of"]:
                         int_bits.append("{}({})".format(rel["property"], rel["filler"]))
@@ -449,6 +491,34 @@ class AssocGoCamModel(GoCamModel):
                     # is_cool = True  # Open the flood gates
                     if is_cool:
                         logger.debug("GOOD: {}".format(ext_str))
+                        # Nesting repeated extension relations (i.e. occurs_in, part_of)
+                        ext_rels_to_nest = ['occurs_in', 'part_of']  # Switch to turn on/off extension nesting
+                        for ertn in ext_rels_to_nest:
+                            nest_exts = [ext for ext in intersection_extensions if ext["property"] == ertn]
+                            if len(nest_exts) > 1:
+                                # Sort by specific term to general term
+                                sorted_nest_ext_terms = sort_terms_by_ontology_specificity(
+                                    [ne["filler"] for ne in nest_exts])
+                                # Translate
+                                loc_subj_n = annot_subgraph.get_anchor()
+                                for idx, ne_term in enumerate(sorted_nest_ext_terms):
+                                    # location_relation could be part_of, occurs_in, or located_in
+                                    # Figure out what types of classes these are
+                                    # Use case here is matching to ShEx shape class
+                                    subj_shape = SHEX_HELPER.shape_from_class(AnnotationSubgraph.node_class(loc_subj_n),
+                                                                              self.extensions_mapper.go_aspector)
+                                    loc_obj_n = annot_subgraph.add_instance_of_class(ne_term)
+                                    obj_shape = SHEX_HELPER.shape_from_class(ne_term,
+                                                                             self.extensions_mapper.go_aspector)
+                                    # location_relation = "BFO:0000050"  # part_of
+                                    location_relation = SHEX_HELPER.relation_lookup(subj_shape, obj_shape)
+                                    if idx == 0 and ertn == "occurs_in":
+                                        location_relation = "BFO:0000066"  # occurs_in - because MF -> @<AnatomicalEntity> OR @<CellularComponent>
+                                    annot_subgraph.add_edge(loc_subj_n, location_relation, loc_obj_n)
+
+                                    loc_subj_n = loc_obj_n  # For next iteration
+                                # Remove from intersection_extensions because this is now already translated
+                                [intersection_extensions.remove(ext) for ext in nest_exts]
                         for rel in intersection_extensions:
                             ext_relation = rel["property"]
                             ext_target = rel["filler"]
@@ -538,27 +608,34 @@ class AssocGoCamModel(GoCamModel):
                 enabled_by_n = annot_subgraph.add_instance_of_class(gp_id)
                 annot_subgraph.add_edge(term_n, "RO:0002333", enabled_by_n)
             elif q == "involved_in":
-                mf_n = annot_subgraph.add_instance_of_class(upt.molecular_function, is_anchor=True)
+                # mf_n = annot_subgraph.add_instance_of_class(upt.molecular_function, is_anchor=True)
+                mf_n = annot_subgraph.add_instance_of_class(upt.molecular_function)
                 enabled_by_n = annot_subgraph.add_instance_of_class(gp_id)
-                term_n = annot_subgraph.add_instance_of_class(term)
+                # term_n = annot_subgraph.add_instance_of_class(term)
+                term_n = annot_subgraph.add_instance_of_class(term, is_anchor=True)
                 annot_subgraph.add_edge(mf_n, "RO:0002333", enabled_by_n)
                 annot_subgraph.add_edge(mf_n, "BFO:0000050", term_n)
             elif q in ACTS_UPSTREAM_OF_RELATIONS:
                 # Look for existing GP <- enabled_by [root MF] -> causally_upstream_of BP
                 causally_relation = ENABLES_O_RELATION_LOOKUP[ACTS_UPSTREAM_OF_RELATIONS[q]]
-                mf_n = annot_subgraph.add_instance_of_class(upt.molecular_function, is_anchor=True)
+                # mf_n = annot_subgraph.add_instance_of_class(upt.molecular_function, is_anchor=True)
+                mf_n = annot_subgraph.add_instance_of_class(upt.molecular_function)
                 enabled_by_n = annot_subgraph.add_instance_of_class(gp_id)
-                term_n = annot_subgraph.add_instance_of_class(term)
+                # term_n = annot_subgraph.add_instance_of_class(term)
+                term_n = annot_subgraph.add_instance_of_class(term, is_anchor=True)
                 annot_subgraph.add_edge(mf_n, "RO:0002333", enabled_by_n)
                 annot_subgraph.add_edge(mf_n, causally_relation, term_n)
             elif q == "NOT":
                 # Try it in UI and look at OWL
-                do_stuff = 1
+                pass
             else:
                 # TODO: should check that existing axiom/triple isn't connected to anything else; length matches exactly
                 enabled_by_n = annot_subgraph.add_instance_of_class(gp_id)
                 term_n = annot_subgraph.add_instance_of_class(term, is_anchor=True)
                 # annot_subgraph.add_edge(enabled_by_n, self.relations_dict[q], term_n)
+                if q == "part_of" and SHEX_HELPER.shape_from_class(term, self.extensions_mapper.go_aspector) == "CellularComponent":
+                    # Using shex_shape function should exclude AnatomicalEntity from getting located_in
+                    q = "located_in"
                 if q not in self.relations_dict:
                     relation = self.translate_relation_to_ro(q)
                 else:
