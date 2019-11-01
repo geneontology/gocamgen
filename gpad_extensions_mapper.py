@@ -331,9 +331,6 @@ def following_rules(extension_list, aspect, term):
     combos_to_check_for = [
         ["occurs_in(UBERON)", "occurs_in(EMAPA)"]
     ]
-    if aspect in ["F","P"]:
-        combos_to_check_for.append(["has_input(geneID)", "has_input(CHEBI)",
-                                    "has_direct_input(geneID)", "has_direct_input(CHEBI)"])
     # Only allow 1 occurrence each of combos_to_check_for
     if violates_combo_rule(ext_counts, combos_to_check_for, 1):
         # return False
