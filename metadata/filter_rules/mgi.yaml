@@ -4,7 +4,6 @@ description: "Filter rules for Mouse Genome Informatics"
 unwanted_evidence_codes:
  - IEA
  - IBA
- - ISO
 unwanted_evi_code_ref_combos:
  - - IKR
    - PMID:21873635
