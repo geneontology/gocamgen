@@ -10,8 +10,8 @@ from rdflib_sparql_wrapper import RdflibSparqlWrapper
 from gocamgen.subgraphs import AnnotationSubgraph
 
 # logging.basicConfig(level=logging.DEBUG)
-# logger = logging.getLogger("gen_models_by_gene")
-# logger.setLevel(logging.DEBUG)
+logger = logging.getLogger("gocamgen.gocamgen")
+logger.setLevel(logging.ERROR)
 
 
 class TestReferencePreference(unittest.TestCase):
