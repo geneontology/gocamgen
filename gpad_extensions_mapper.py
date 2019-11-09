@@ -16,6 +16,7 @@ import logging
 import datetime
 from pathlib import Path
 
+
 DISTINCT_EXTENSIONS = {}
 
 # logging.basicConfig(level=logging.INFO)
@@ -165,8 +166,21 @@ EXTENSION_RELATION_UNIVERSE.append([
     "has_regulation_target(geneID)"
 ])
 
-RO_ONTOLOGY = OntologyFactory().create("http://purl.obolibrary.org/obo/ro.owl")
-GO_ONTOLOGY = OntologyFactory().create("go")
+RO_ONTOLOGY = None
+GO_ONTOLOGY = None
+
+
+def setup_ontologies(go_ontology=None, ro_ontology=None):
+    global GO_ONTOLOGY
+    if go_ontology is None:
+        GO_ONTOLOGY = OntologyFactory().create("go")
+    else:
+        GO_ONTOLOGY = go_ontology
+    global RO_ONTOLOGY
+    if ro_ontology is None:
+        RO_ONTOLOGY = OntologyFactory().create("http://purl.obolibrary.org/obo/ro.owl")
+    else:
+        RO_ONTOLOGY = ro_ontology
 
 
 gaf_indices = {}
@@ -174,10 +188,11 @@ gpad_indices = {
 
 }
 
+
 class CachedGoAspector(GoAspector):
 
-    def __init__(self, cache_filepath=None):
-        GoAspector.__init__(self, GO_ONTOLOGY)
+    def __init__(self, cache_filepath=None, go_ontology=GO_ONTOLOGY):
+        GoAspector.__init__(self, go_ontology)
         if cache_filepath is None:
             cache_filepath = "resources/aspect_lookup.json"
         self.cache_filepath = cache_filepath
@@ -352,8 +367,9 @@ def filter_no_rules_broken(annots):
 
 
 class ExtensionsMapper():
-    def __init__(self):
-        self.go_aspector = CachedGoAspector("resources/aspect_lookup.json")
+    def __init__(self, go_ontology=None, ro_ontology=None):
+        setup_ontologies(go_ontology, ro_ontology)
+        self.go_aspector = CachedGoAspector("resources/aspect_lookup.json", go_ontology=go_ontology)
 
     def extensions_list(self, intersection_extensions, row_cols=[]):
         ext_list = []
