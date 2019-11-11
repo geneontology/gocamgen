@@ -7,6 +7,8 @@ unwanted_evidence_codes:
 unwanted_evi_code_ref_combos:
  - - IKR
    - PMID:21873635
+ - - ISO
+   - GO_REF:0000096
 required_attributes:
 unwanted_properties:
  - noctua-model-id
