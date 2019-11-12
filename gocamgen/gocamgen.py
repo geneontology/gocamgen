@@ -1,25 +1,25 @@
 from ontobio.rdfgen.assoc_rdfgen import CamRdfTransform, TurtleRdfWriter, genid, prefix_context
 from ontobio.vocabulary.relations import OboRO, Evidence
 from ontobio.vocabulary.upper import UpperLevel
-from ontobio.util.go_utils import GoAspector
-from ontobio.ontol_factory import OntologyFactory
+# from ontobio.util.go_utils import GoAspector
+# from ontobio.ontol_factory import OntologyFactory
 from prefixcommons.curie_util import expand_uri, contract_uri
 from rdflib.namespace import OWL, RDF
 from rdflib import Literal
 from rdflib.term import URIRef
 from rdflib.namespace import Namespace
 import rdflib
-import networkx
-import logging
-import argparse
+# import networkx
+# import logging
+# import argparse
 import datetime
 import os.path as path
 import logging
-from triple_pattern_finder import TriplePattern, TriplePatternFinder, TriplePair, TriplePairCollection
-from rdflib_sparql_wrapper import RdflibSparqlWrapper
+from triple_pattern_finder import TriplePattern, TriplePatternFinder
 from gocamgen.subgraphs import AnnotationSubgraph
-from gocamgen.collapsed_assoc import CollapsedAssociationSet, CollapsedAssociation, get_annot_extensions
+from gocamgen.collapsed_assoc import CollapsedAssociationSet, CollapsedAssociation
 from utils import sort_terms_by_ontology_specificity, ShexHelper
+
 
 # logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -421,6 +421,7 @@ class AssocGoCamModel(GoCamModel):
 
     def translate(self):
 
+        self.associations.go_ontology = self.ontology
         self.associations.collapse_annotations()
 
         for a in self.associations:

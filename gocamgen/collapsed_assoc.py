@@ -3,15 +3,21 @@ from ontobio.ontol_factory import OntologyFactory
 from ontobio.io.gpadparser import GpadParser
 from ontobio.io.assocparser import SplitLine
 
-GO_ONTOLOGY = OntologyFactory().create("go")
 GPAD_PARSER = GpadParser()
 BINDING_ROOT = "GO:0005488"  # binding
+IPI_ECO_CODE = "ECO:0000353"
+
 
 class CollapsedAssociationSet:
     def __init__(self, associations):
         self.associations = associations
         self.collapsed_associations = []
         self.assoc_dict = {}
+        self.go_ontology = None
+
+    def setup_ontologies(self):
+        if self.go_ontology is None:
+            self.go_ontology = OntologyFactory().create("go")
 
     def collapse_annotations(self):
         # Here we shall decide the distinct assertion instances going into the model
@@ -30,15 +36,18 @@ class CollapsedAssociationSet:
         # 		5. Date
         # 		6. Assigned by
         # 		7. Properties
+        self.setup_ontologies()
+
         for a in self.associations:
             # Header
             subj_id = a["subject"]["id"]
             qualifiers = a["qualifiers"]
             term = a["object"]["id"]
             with_from = a["evidence"]["with_support_from"]
+            eco_code = a["evidence"]["type"]
             extensions = get_annot_extensions(a)
             with_froms = get_with_froms(a)  # Handle pipe separation according to import requirements
-            is_protein_binding = BINDING_ROOT in GO_ONTOLOGY.ancestors(term, reflexive=True)
+            is_protein_binding = eco_code == IPI_ECO_CODE and BINDING_ROOT in self.go_ontology.ancestors(term, reflexive=True)
             if is_protein_binding:
                 cas = self.find_or_create_collapsed_associations(subj_id, qualifiers, term, with_froms, extensions)
                 with_from = None  # Don't use ontobio-parsed with_from on lines

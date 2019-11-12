@@ -31,11 +31,11 @@ parser.add_argument('-r', '--report', help="Generate report", action="store_cons
 # class GoCamGPADInputHandler(GoCamInputHandler):
 class GoCamBuilder:
     def __init__(self):
-        self.ext_mapper = ExtensionsMapper()
         self.ro_ontology = OntologyFactory().create("http://purl.obolibrary.org/obo/ro.owl")
         self.gorel_ontology = OntologyFactory().create("http://release.geneontology.org/2019-03-18/ontology/extensions/gorel.obo")
         # Can't get logical_definitions w/ ont.create("go"), need to load ontology via PURL
         self.go_ontology = OntologyFactory().create("http://purl.obolibrary.org/obo/go.owl")
+        self.ext_mapper = ExtensionsMapper(go_ontology=self.go_ontology, ro_ontology=self.ro_ontology)
 
     def translate_to_model(self, gene, assocs):
         model = AssocGoCamModel(gene, assocs)
