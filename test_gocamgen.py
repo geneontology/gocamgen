@@ -8,6 +8,7 @@ from triple_pattern_finder import TriplePattern, TriplePatternFinder, TriplePair
 from rdflib.term import URIRef
 from rdflib_sparql_wrapper import RdflibSparqlWrapper
 from gocamgen.subgraphs import AnnotationSubgraph
+from utils import ShexHelper
 
 # logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger("gocamgen.gocamgen")
@@ -301,6 +302,16 @@ class TestGoCamModel(unittest.TestCase):
             if extractor.assoc_filter.validate_line(a):
                 filtered_assocs.append(a)
         self.assertEqual(len(filtered_assocs), 1)
+
+    def test_complex_shex_shape_recognition(self):
+        complex_root = "GO:0032991"
+        shex_helper = ShexHelper()
+
+        shape = shex_helper.shape_from_class(complex_root, TestGoCamModel.BUILDER.ext_mapper.go_aspector)
+        self.assertEqual(shape, "ProteinContainingComplex")
+
+        shape = shex_helper.shape_from_class("GO:0003674", TestGoCamModel.BUILDER.ext_mapper.go_aspector)
+        self.assertEqual(shape, "MolecularFunction")
 
 
 if __name__ == '__main__':
