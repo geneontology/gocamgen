@@ -95,6 +95,9 @@ ENABLES_O_RELATION_LOOKUP = {
     "RO:0004034": "RO:0002304",
     "RO:0004035": "RO:0002305"
 }
+REGULATES_CHAIN_RELATIONS = [
+    "regulates_o_occurs_in"
+]
 
 
 SHEX_HELPER = ShexHelper()
@@ -534,6 +537,16 @@ class AssocGoCamModel(GoCamModel):
                                 # Need to find what mf we're talking about
                                 anchor_n = annot_subgraph.get_anchor()
                                 annot_subgraph.add_edge(anchor_n, INPUT_RELATIONS[ext_relation], ext_target_n)
+                            elif ext_relation in REGULATES_CHAIN_RELATIONS:
+                                # Get target MF from primary term (BP) e.g. GO:0007346 regulates some mitotic cell cycle
+                                regulates_rel, regulated_term = self.get_rel_and_term_in_logical_definitions(term)
+                                regulated_term_n = annot_subgraph.add_instance_of_class(regulated_term)
+                                anchor_n = annot_subgraph.get_anchor()
+                                annot_subgraph.add_edge(anchor_n, regulates_rel, regulated_term_n)
+                                ext_target_n = annot_subgraph.add_instance_of_class(ext_target)
+                                # Need to derive chained relation (e.g. "occurs_in") from this ext rel. Just replace("regulates_o_", "")?
+                                chained_rel = INPUT_RELATIONS[ext_relation.replace("regulates_o_", "")]
+                                annot_subgraph.add_edge(regulated_term_n, chained_rel, ext_target_n)
                             elif ext_relation in HAS_REGULATION_TARGET_RELATIONS:
                                 buckets = has_regulation_target_bucket(self.ontology, term)
                                 if len(buckets) > 0:
