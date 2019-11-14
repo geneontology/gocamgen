@@ -1,5 +1,5 @@
 import gocamgen
-from gocamgen.gocamgen import expand_uri_wrapper, contract_uri_wrapper, ACTS_UPSTREAM_OF_RELATIONS, ENABLES_O_RELATION_LOOKUP
+from gocamgen.gocamgen import expand_uri_wrapper, contract_uri_wrapper, ACTS_UPSTREAM_OF_RELATIONS
 import unittest
 import logging
 from filter_rule import WBFilterRule, MGIFilterRule
@@ -157,7 +157,7 @@ class TestGoCamModel(unittest.TestCase):
         sparql_wrapper = RdflibSparqlWrapper()
         gp = "MGI:MGI:1914305"
         term = "GO:0007416"
-        causally_relation = ENABLES_O_RELATION_LOOKUP[ACTS_UPSTREAM_OF_RELATIONS["acts_upstream_of_or_within"]]
+        causally_relation = model.get_causally_upstream_relation(ACTS_UPSTREAM_OF_RELATIONS["acts_upstream_of_or_within"])
         qres = sparql_wrapper.find_acts_upstream_of_translated(model.graph, gp, causally_relation, term)
         self.assertEqual(len(qres), 1)
 

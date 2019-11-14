@@ -82,19 +82,6 @@ HAS_REGULATION_TARGET_RELATIONS = {
     # WB:WBGene00013591 involved_in GO:0042594
     "has_regulation_target": ""
 }
-# TODO: Grab these from RO property chain axioms
-ENABLES_O_RELATION_LOOKUP = {
-    # "acts upstream of": "causally upstream of",
-    "RO:0002263": "RO:0002411",
-    # "acts upstream of or within": "causally upstream of or within",
-    "RO:0002264": "RO:0002418",
-    # "acts upstream of or within, positive effect": "causally upstream of or within, positive effect",
-    "RO:0004032": "RO:0004047",
-    # "acts upstream of or within, negative effect": "causally upstream of or within, negative effect",
-    "RO:0004033": "RO:0004046",
-    "RO:0004034": "RO:0002304",
-    "RO:0004035": "RO:0002305"
-}
 
 
 SHEX_HELPER = ShexHelper()
@@ -408,6 +395,7 @@ class GoCamModel():
 
 
 class AssocGoCamModel(GoCamModel):
+    ENABLES_O_RELATION_LOOKUP = {}
 
     def __init__(self, modeltitle, assocs, connection_relations=None):
         GoCamModel.__init__(self, modeltitle, connection_relations)
@@ -618,7 +606,7 @@ class AssocGoCamModel(GoCamModel):
                 annot_subgraph.add_edge(mf_n, "BFO:0000050", term_n)
             elif q in ACTS_UPSTREAM_OF_RELATIONS:
                 # Look for existing GP <- enabled_by [root MF] -> causally_upstream_of BP
-                causally_relation = ENABLES_O_RELATION_LOOKUP[ACTS_UPSTREAM_OF_RELATIONS[q]]
+                causally_relation = self.get_causally_upstream_relation(ACTS_UPSTREAM_OF_RELATIONS[q])
                 # mf_n = annot_subgraph.add_instance_of_class(upt.molecular_function, is_anchor=True)
                 mf_n = annot_subgraph.add_instance_of_class(upt.molecular_function)
                 enabled_by_n = annot_subgraph.add_instance_of_class(gp_id)
@@ -695,15 +683,25 @@ class AssocGoCamModel(GoCamModel):
             return None, None
 
     def get_causally_upstream_relation(self, relation):
+        regulates = "RO:0002211"
         causally_upstream_relations = []
-        for p in self.ro_ontology.parents(relation,
-                                          relations=['subPropertyOf']):
-            # For GO:0045944 this is grabbing both RO:0002304 and RO:0002211
-            # Need specifically RO:0002304; how to specify?
-            #   regulates_rel will only ever be regulates, positively regulates, or
-            #   negatively regulates. If regulates in parents, grab other term
-            if not p == "RO:0002211":  # regulates
-                causally_upstream_relations.append(p)
+        if relation == regulates or regulates in self.ro_ontology.ancestors(relation):
+            for p in self.ro_ontology.parents(relation,
+                                              relations=['subPropertyOf']):
+                # For GO:0045944 this is grabbing both RO:0002304 and RO:0002211
+                # Need specifically RO:0002304; how to specify?
+                #   regulates_rel will only ever be regulates, positively regulates, or
+                #   negatively regulates. If regulates in parents, grab other term
+                if not p == regulates:
+                    causally_upstream_relations.append(p)
+        # input relations could have some unique logical difference (e.g. positively_regulates vs acts_upstream_of)
+        else:
+            if relation in self.ENABLES_O_RELATION_LOOKUP:
+                return self.ENABLES_O_RELATION_LOOKUP[relation]
+            else:
+                causally_upstream_relation = self.ro_ontology.get_property_chain_axioms(relation)[0].chain_predicate_ids[1]  # always 2nd idx?
+                self.ENABLES_O_RELATION_LOOKUP[relation] = causally_upstream_relation
+                return causally_upstream_relation
         if len(causally_upstream_relations) > 0:
             return causally_upstream_relations[0]
         else:
