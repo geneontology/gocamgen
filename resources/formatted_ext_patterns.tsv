@@ -17,7 +17,7 @@ has_regulation_target	geneID,PR,SO	GO:0008150
 regulates_o_occurs_in	EMAPA,UBERON,WBbt,CL	GO:0008150	
 regulates_o_occurs_in	CL	GO:0003674	
 regulates_o_results_in_division_of	CL	GO:0050789	
-regulates_o_transports_or_maintains_localization_of	geneID,PR	GO:0050789
+regulates_o_transports_or_maintains_localization_of	geneID,PR	GO:0050789	
 results_in_acquisition_of_feature_of	CL,WBbt	GO:0030154	
 has_output_o_axis_of	EMAPA,UBERON,WBbt	GO:0007389	
 has_output_o_axis_of	CL,WBbt	GO:0008150	
