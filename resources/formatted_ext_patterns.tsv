@@ -41,7 +41,7 @@ regulates_o_has_output	geneID,GO:C,CHEBI	GO:0008150
 results_in_maturation_of	CL,WBbt	GO:0048469	
 results_in_maturation_of	EMAPA,UBERON,WBbt	GO:0071695	
 regulates_o_results_in_formation_of	EMAPA,UBERON,WBbt	GO:0022603	
-adjacent_to	CL,WBbt	GO:0022603	
+adjacent_to	CL,WBbt	GO:0005576  	
 exists_during	GO:P,WBls	GO:0005575	
 results_in_commitment_to	CL,WBbt	GO:0045165	
 regulates_transcription_of	geneID	GO:1903506	
