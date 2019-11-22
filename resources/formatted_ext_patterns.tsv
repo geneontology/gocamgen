@@ -52,7 +52,6 @@ part_of	geneID,GO:P	GO:0008150
 part_of	CL,WBbt	GO:0010453	
 part_of	EMAPA,UBERON,WBbt	GO:0008150,GO:0003674	
 results_in_specification_of	CL,WBbt	GO:0001708	
-results_in_specification_of	EMAPA,UBERON,WBbt	GO:1903429	
 negatively_regulates	geneID	GO:0008150,GO:0003674	
 negatively_regulates	GO:P	GO:0008150	
 negatively_regulates	GO:F	GO:0005488	
