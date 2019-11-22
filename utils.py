@@ -81,7 +81,8 @@ class ShexHelper:
         aspect = go_aspector.go_aspect(class_term)
         if aspect == "C":
             # Oh great, now we gotta look further into the ontology
-            if complex_term in go_aspector.get_isa_closure(class_term):
+            # TODO: ensure reflexive=True in all ancestors calls in ontobio.util.go_utils.get_ancestors_through_subont()
+            if complex_term in go_aspector.get_isa_closure(class_term) + [class_term]:
                 return shape_map[complex_term]
             else:
                 return shape_map["GO:0005575"]

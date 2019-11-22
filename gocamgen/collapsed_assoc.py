@@ -5,6 +5,7 @@ from ontobio.io.assocparser import SplitLine
 
 GPAD_PARSER = GpadParser()
 BINDING_ROOT = "GO:0005488"  # binding
+IPI_ECO_CODE = "ECO:0000353"
 
 
 class CollapsedAssociationSet:
@@ -43,9 +44,10 @@ class CollapsedAssociationSet:
             qualifiers = a["qualifiers"]
             term = a["object"]["id"]
             with_from = a["evidence"]["with_support_from"]
+            eco_code = a["evidence"]["type"]
             extensions = get_annot_extensions(a)
             with_froms = get_with_froms(a)  # Handle pipe separation according to import requirements
-            is_protein_binding = BINDING_ROOT in self.go_ontology.ancestors(term, reflexive=True)
+            is_protein_binding = eco_code == IPI_ECO_CODE and BINDING_ROOT in self.go_ontology.ancestors(term, reflexive=True)
             if is_protein_binding:
                 cas = self.find_or_create_collapsed_associations(subj_id, qualifiers, term, with_froms, extensions)
                 with_from = None  # Don't use ontobio-parsed with_from on lines
