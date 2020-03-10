@@ -18,7 +18,7 @@ import logging
 from triple_pattern_finder import TriplePattern, TriplePatternFinder
 from gocamgen.subgraphs import AnnotationSubgraph
 from gocamgen.collapsed_assoc import CollapsedAssociationSet, CollapsedAssociation
-from utils import sort_terms_by_ontology_specificity, ShexHelper
+from utils import sort_terms_by_ontology_specificity, ShexHelper, ShexException
 
 
 # logging.basicConfig(level=logging.INFO)
@@ -490,21 +490,26 @@ class AssocGoCamModel(GoCamModel):
                                     [ne["filler"] for ne in nest_exts])
                                 # Translate
                                 loc_subj_n = annot_subgraph.get_anchor()
+                                loc_subj_term = AnnotationSubgraph.node_class(loc_subj_n)
                                 for idx, ne_term in enumerate(sorted_nest_ext_terms):
                                     # location_relation could be part_of, occurs_in, or located_in
                                     # Figure out what types of classes these are
                                     # Use case here is matching to ShEx shape class
-                                    subj_shape = SHEX_HELPER.shape_from_class(AnnotationSubgraph.node_class(loc_subj_n),
+                                    subj_shape = SHEX_HELPER.shape_from_class(loc_subj_term,
                                                                               self.extensions_mapper.go_aspector)
                                     loc_obj_n = annot_subgraph.add_instance_of_class(ne_term)
                                     obj_shape = SHEX_HELPER.shape_from_class(ne_term,
                                                                              self.extensions_mapper.go_aspector)
                                     # location_relation = "BFO:0000050"  # part_of
-                                    location_relation = SHEX_HELPER.relation_lookup(subj_shape, obj_shape)
+                                    try:
+                                        location_relation = SHEX_HELPER.relation_lookup(subj_shape, obj_shape)
+                                    except ShexException as ex:
+                                        raise ShexException(ex.message + f" for {loc_subj_term} to {ne_term}")
                                     if idx == 0 and ertn == "occurs_in":
                                         location_relation = "BFO:0000066"  # occurs_in - because MF -> @<AnatomicalEntity> OR @<CellularComponent>
                                     annot_subgraph.add_edge(loc_subj_n, location_relation, loc_obj_n)
 
+                                    loc_subj_term = ne_term  # For next iteration
                                     loc_subj_n = loc_obj_n  # For next iteration
                                 # Remove from intersection_extensions because this is now already translated
                                 [intersection_extensions.remove(ext) for ext in nest_exts]

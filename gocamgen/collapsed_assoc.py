@@ -115,6 +115,7 @@ class CollapsedAssociation:
             return self.header["evidence"]["with_support_from"]
 
     def __str__(self):
+        # TODO: Reconstruct GPAD format or original line - could mean multiple lines for each evidence
         return "{} - {}".format(self.subject_id(), self.object_id())
 
     def __iter__(self):

@@ -2,12 +2,15 @@ from gocamgen.gocamgen import AssocGoCamModel
 from gpad_extensions_mapper import ExtensionsMapper
 from filter_rule import AssocFilter, FilterRule, get_filter_rule
 from gocamgen.collapsed_assoc import extract_properties
+from gocamgen.errors import GocamgenException, GeneErrorSet
+from utils import ShexException
 from ontobio.io.gpadparser import GpadParser
 from ontobio.ontol_factory import OntologyFactory
 # from ontobio.ecomap import EcoMap
 import argparse
 import logging
 import requests
+from requests.exceptions import ConnectionError
 import gzip
 import time
 from os import path
@@ -138,6 +141,33 @@ if __name__ == "__main__":
     logger.debug("{} distinct genes".format(len(assocs_by_gene)))
 
     builder = GoCamBuilder()
+    errors = GeneErrorSet()  # Errors by gene ID
+
+    def make_model_and_write_out(gene):
+        # All these shenanigans are to prevent mid-run crashes due to an external resource simply blipping
+        # out for a second.
+        retry_count = 0
+        retry_limit = 5
+        while True:
+            try:
+                start_time = time.time()
+                model = builder.translate_to_model(gene, assocs_by_gene[gene])
+                out_filename = "{}.ttl".format(gene.replace(":", "_"))
+                if args.output_directory:
+                    out_filename = path.join(args.output_directory, out_filename)
+                model.write(out_filename)
+                logger.info("Model for {} written to {} in {} sec".format(gene, out_filename, (time.time() - start_time)))
+            except GocamgenException as ex:
+                errors.add_error(gene, ex)
+            except (TimeoutError, ConnectionError) as ex:
+                # This has been happening randomly and breaking full runs
+                errors.add_error(gene, ex)
+                if retry_count < retry_limit:
+                    retry_count += 1
+                    continue  # retry
+                errors.add_error(gene, GocamgenException(f"Bailing on model for {gene} after {retry_count} retries"))
+            break  # Done with this model. Move on to the next one.
+
 
     model_count = 0
     if args.specific_gene:
@@ -146,25 +176,13 @@ if __name__ == "__main__":
                 logger.error("ERROR: specific gene {} not found in filtered annotation list".format(specific_gene))
             else:
                 logger.debug("{} filtered annotations to translate for {}".format(len(assocs_by_gene[specific_gene]), specific_gene))
-                start_time = time.time()
-                model = builder.translate_to_model(specific_gene, assocs_by_gene[specific_gene])
-                out_filename = "{}.ttl".format(specific_gene.replace(":", "_"))
-                if args.output_directory:
-                    out_filename = path.join(args.output_directory, out_filename)
-                model.write(out_filename)
-                logger.info("Model for {} written to {} in {} sec".format(specific_gene, out_filename, (time.time() - start_time)))
+                make_model_and_write_out(specific_gene)
                 model_count += 1
     else:
         for gene in assocs_by_gene:
-            start_time = time.time()
-            model = builder.translate_to_model(gene, assocs_by_gene[gene])
-            out_filename = "{}.ttl".format(gene.replace(":", "_"))
-            if args.output_directory:
-                out_filename = path.join(args.output_directory, out_filename)
-            model.write(out_filename)
-            logger.info("Model for {} written to {} in {} sec".format(gene, out_filename, (time.time() - start_time)))
+            make_model_and_write_out(gene)
             model_count += 1
-            if args.max_model_limit and model_count == args.max_model_limit:
+            if args.max_model_limit and model_count == int(args.max_model_limit):
                 break
 
     if args.report:
@@ -174,4 +192,7 @@ if __name__ == "__main__":
                 reportf.write("{}: {}\n".format(k, gpad_file_metadata[k]))
             # TODO FilterRule().__str__() to display filters
             reportf.write("# of models generated: {}\n".format(model_count))
+            for gene, errs in errors.errors.items():
+                for ex in errs:
+                    reportf.write(f"{type(ex).__name__} - {gene}: {ex}\n")
         logger.info("Report file generated at {}".format(report_file_path))

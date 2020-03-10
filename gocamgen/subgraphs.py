@@ -2,6 +2,10 @@ from networkx import MultiDiGraph
 from rdflib.term import URIRef
 from rdflib_sparql_wrapper import RdflibSparqlWrapper
 from utils import expand_uri_wrapper
+from gocamgen.errors import ModelRdfWriteException
+import logging
+
+logger = logging.getLogger(__name__)
 
 # How do we track/compare fully built annotations before adding to model? We need a separate
 # subgraph for each assertion (no IRIs, just classes)
@@ -150,7 +154,13 @@ class AnnotationSubgraph(MultiDiGraph):
                 if object_instance_iri is None:
                     object_instance_iri = model.declare_individual(self.node_class(v))
                     self.nodes[v]["instance_iri"] = object_instance_iri
-                relation_uri = expand_uri_wrapper(relation)
+                try:
+                    relation_uri = expand_uri_wrapper(relation)
+                except AttributeError as ex:
+                    exception_message = "Unparseable relation: {relation} from triple {u} {relation} {v} in model {modeltitle}".format(
+                        relation=relation, u=u, v=v, modeltitle=model.modeltitle)
+                    logger.info(exception_message)
+                    raise ModelRdfWriteException(exception_message)
                 axiom_ids.append(model.add_axiom(model.writer.emit(subject_instance_iri,
                                                                    URIRef(relation_uri),
                                                                    object_instance_iri)))

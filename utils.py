@@ -2,6 +2,7 @@ from os import path
 import json
 import logging
 from ontobio.rdfgen.assoc_rdfgen import prefix_context
+from gocamgen.errors import ShexException
 from prefixcommons.curie_util import expand_uri, contract_uri
 from pyshexc.parser_impl import generate_shexj
 
@@ -103,7 +104,16 @@ class ShexHelper:
         #   part_of: @<AnatomicalEntity> {0,1};
         #   adjacent_to: @<AnatomicalEntity> *;
         #   overlaps: @<AnatomicalEntity> *;
+        obj_shapes = [obj_shape]
+        if obj_shape == "CellularComponent":
+            # Add AnatomicalEntity for CC. Should first look for specific CC matches then check for AnatomicalEntity.
+            obj_shapes.append("AnatomicalEntity")
         for relation, allowable_obj_shapes in self.shapes[subj_shape].items():
-            if obj_shape in allowable_obj_shapes:
-                return relation
-        logger.warning("No relation found in ShEx for {}->{}".format(subj_shape, obj_shape))
+            for obs in obj_shapes:
+                if obs in allowable_obj_shapes:
+                    return relation
+        # Oh no, we couldn't find a relation. This is a no-go for this model.
+        shex_error_message = "No relation found in ShEx for {}->{}".format(subj_shape, obj_shape)
+        logger.warning(shex_error_message)
+        # Throw Exception and except-skip in model builder
+        raise ShexException(shex_error_message)
