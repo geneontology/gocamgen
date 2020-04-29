@@ -1,14 +1,14 @@
 import gocamgen
-from gocamgen.gocamgen import expand_uri_wrapper, contract_uri_wrapper, ACTS_UPSTREAM_OF_RELATIONS
+from gocamgen.gocamgen import expand_uri_wrapper, ACTS_UPSTREAM_OF_RELATIONS
 import unittest
 import logging
-from filter_rule import WBFilterRule, MGIFilterRule
+from gocamgen.filter_rule import WBFilterRule, MGIFilterRule
 from gen_models_by_gene import AssocExtractor, GoCamBuilder
-from triple_pattern_finder import TriplePattern, TriplePatternFinder, TriplePair, TriplePairCollection
+from gocamgen.triple_pattern_finder import TriplePattern, TriplePatternFinder, TriplePair, TriplePairCollection
 from rdflib.term import URIRef
-from rdflib_sparql_wrapper import RdflibSparqlWrapper
+from gocamgen.rdflib_sparql_wrapper import RdflibSparqlWrapper
 from gocamgen.subgraphs import AnnotationSubgraph
-from utils import ShexHelper
+from gocamgen.utils import ShexHelper
 
 # logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger("gocamgen.gocamgen")

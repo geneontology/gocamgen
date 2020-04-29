@@ -1,9 +1,9 @@
 from gocamgen.gocamgen import AssocGoCamModel
-from gpad_extensions_mapper import ExtensionsMapper
-from filter_rule import AssocFilter, FilterRule, get_filter_rule
+from gocamgen.gpad_extensions_mapper import ExtensionsMapper
+from gocamgen.filter_rule import AssocFilter, FilterRule, get_filter_rule
 from gocamgen.collapsed_assoc import extract_properties
 from gocamgen.errors import GocamgenException, GeneErrorSet
-from utils import ShexException
+from gocamgen.utils import ShexException
 from ontobio.io.gpadparser import GpadParser
 from ontobio.ontol_factory import OntologyFactory
 # from ontobio.ecomap import EcoMap

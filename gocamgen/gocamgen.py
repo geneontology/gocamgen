@@ -15,10 +15,10 @@ import rdflib
 import datetime
 import os.path as path
 import logging
-from triple_pattern_finder import TriplePattern, TriplePatternFinder
+from gocamgen.triple_pattern_finder import TriplePattern, TriplePatternFinder
 from gocamgen.subgraphs import AnnotationSubgraph
 from gocamgen.collapsed_assoc import CollapsedAssociationSet, CollapsedAssociation
-from utils import sort_terms_by_ontology_specificity, ShexHelper, ShexException
+from gocamgen.utils import sort_terms_by_ontology_specificity, ShexHelper, ShexException
 
 
 # logging.basicConfig(level=logging.INFO)
@@ -231,7 +231,7 @@ class GoCamModel():
         self.writer.emit(stmt_id, OWL.annotatedTarget, target_id)
 
         if evidence:
-            self.add_evidence(stmt_id, evidence.evidence_code, evidence.references)
+            self.add_evidence(stmt_id, evidence)
 
         return stmt_id
 

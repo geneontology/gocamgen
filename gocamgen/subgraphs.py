@@ -1,7 +1,7 @@
 from networkx import MultiDiGraph
 from rdflib.term import URIRef
-from rdflib_sparql_wrapper import RdflibSparqlWrapper
-from utils import expand_uri_wrapper
+from gocamgen.rdflib_sparql_wrapper import RdflibSparqlWrapper
+from gocamgen.utils import expand_uri_wrapper
 from gocamgen.errors import ModelRdfWriteException
 import logging
 

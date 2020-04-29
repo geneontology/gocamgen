@@ -1,5 +1,5 @@
 #from gocamgen.gocamgen import AssocGoCamModel
-from utils import contract_uri_wrapper
+from gocamgen.utils import contract_uri_wrapper
 
 ### Simple example: 'GP --enabled_by--> MF --part_of--> BP'
 ### First find all 'GP --enabled_by--> MF' triples

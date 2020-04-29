@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="gocamgen",
-    version='0.0.4',
+    version='0.0.5',
     # packages=["gocamgen"],
     packages=find_packages(),
     author="dustine32",
@@ -11,6 +11,7 @@ setup(
     long_description=open("README.md").read(),
     url="https://github.com/dustine32/gocamgen",
     install_requires=[
-        "ontobio"
+        "ontobio==1.13.1",
+        "PyShEx==0.7.11"
     ]
 )

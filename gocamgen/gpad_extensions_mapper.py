@@ -3,10 +3,9 @@ from ontobio.io.gpadparser import GpadParser
 from ontobio.io.assocparser import SplitLine
 from ontobio.ontol_factory import OntologyFactory
 # from prefixcommons import curie_util
-from ontobio.ecomap import EcoMap
 from ontobio.util.go_utils import GoAspector
 from ontobio.rdfgen.assoc_rdfgen import prefix_context
-from filter_rule import *
+from gocamgen.filter_rule import *
 from gocamgen.collapsed_assoc import extract_properties
 import json
 import csv
