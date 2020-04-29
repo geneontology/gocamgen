@@ -1,1 +1,2 @@
-ontobio==1.9.4
+ontobio==1.13.1
+PyShEx==0.7.11
