@@ -15,6 +15,9 @@ import gzip
 import time
 from os import path
 # from abc import ABC, abstractmethod
+from rdflib.graph import ConjunctiveGraph
+from rdflib.store import Store
+from rdflib import plugin
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -28,10 +31,11 @@ parser.add_argument('-n', '--max_model_limit', help="Only translate specified nu
 parser.add_argument('-m', '--mod', help="MOD rules to follow for filtering and translating.")
 parser.add_argument('-d', '--output_directory', help="Directory to output model ttl files to")
 parser.add_argument('-r', '--report', help="Generate report", action="store_const", const=True)
+parser.add_argument('-N', '--nquads', help="Filepath to write model file in N-Quads format")
 
 # GoCamInputHandler
 
-# class GoCamGPADInputHandler(GoCamInputHandler):
+
 class GoCamBuilder:
     def __init__(self):
         self.ro_ontology = OntologyFactory().create("http://purl.obolibrary.org/obo/ro.owl")
@@ -39,9 +43,10 @@ class GoCamBuilder:
         # Can't get logical_definitions w/ ont.create("go"), need to load ontology via PURL
         self.go_ontology = OntologyFactory().create("http://purl.obolibrary.org/obo/go.owl")
         self.ext_mapper = ExtensionsMapper(go_ontology=self.go_ontology, ro_ontology=self.ro_ontology)
+        self.store = plugin.get('IOMemory', Store)()
 
     def translate_to_model(self, gene, assocs):
-        model = AssocGoCamModel(gene, assocs)
+        model = AssocGoCamModel(gene, assocs, store=self.store)
         model.extensions_mapper = self.ext_mapper
         model.ontology = self.go_ontology
         model.ro_ontology = self.ro_ontology
@@ -143,7 +148,7 @@ if __name__ == "__main__":
     builder = GoCamBuilder()
     errors = GeneErrorSet()  # Errors by gene ID
 
-    def make_model_and_write_out(gene):
+    def make_model_and_write_out(gene, nquads=False):
         # All these shenanigans are to prevent mid-run crashes due to an external resource simply blipping
         # out for a second.
         retry_count = 0
@@ -152,11 +157,16 @@ if __name__ == "__main__":
             try:
                 start_time = time.time()
                 model = builder.translate_to_model(gene, assocs_by_gene[gene])
-                out_filename = "{}.ttl".format(gene.replace(":", "_"))
-                if args.output_directory:
-                    out_filename = path.join(args.output_directory, out_filename)
-                model.write(out_filename)
-                logger.info("Model for {} written to {} in {} sec".format(gene, out_filename, (time.time() - start_time)))
+                # add_to_conjunctive_graph(model, conjunctive_graph)
+                if nquads:
+                    logger.info(
+                        "Model for {} added to graphstore in {} sec".format(gene, (time.time() - start_time)))
+                else:
+                    out_filename = "{}.ttl".format(gene.replace(":", "_"))
+                    if args.output_directory:
+                        out_filename = path.join(args.output_directory, out_filename)
+                    model.write(out_filename)
+                    logger.info("Model for {} written to {} in {} sec".format(gene, out_filename, (time.time() - start_time)))
             except GocamgenException as ex:
                 errors.add_error(gene, ex)
             except (TimeoutError, ConnectionError) as ex:
@@ -176,14 +186,19 @@ if __name__ == "__main__":
                 logger.error("ERROR: specific gene {} not found in filtered annotation list".format(specific_gene))
             else:
                 logger.debug("{} filtered annotations to translate for {}".format(len(assocs_by_gene[specific_gene]), specific_gene))
-                make_model_and_write_out(specific_gene)
+                make_model_and_write_out(specific_gene, args.nquads)
                 model_count += 1
     else:
         for gene in assocs_by_gene:
-            make_model_and_write_out(gene)
+            make_model_and_write_out(gene, args.nquads)
             model_count += 1
             if args.max_model_limit and model_count == int(args.max_model_limit):
                 break
+
+    if args.nquads:
+        cg = ConjunctiveGraph(builder.store)
+        cg.serialize(destination=args.nquads, format="nquads")
+        logger.info(f"Full model graphstore written out in N-Quads format to {args.nquads}")
 
     if args.report:
         report_file_path = "{}.report".format(gpad_file)

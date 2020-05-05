@@ -177,8 +177,8 @@ class GoCamModel():
         "located_in": "RO:0001025",
     }
 
-    def __init__(self, modeltitle, connection_relations=None):
-        cam_writer = CamTurtleRdfWriter(modeltitle)
+    def __init__(self, modeltitle, connection_relations=None, store=None):
+        cam_writer = CamTurtleRdfWriter(modeltitle, store=store)
         self.writer = AnnotonCamRdfTransform(cam_writer)
         self.modeltitle = modeltitle
         self.classes = []
@@ -191,11 +191,11 @@ class GoCamModel():
             self.connection_relations = connection_relations
         self.declare_properties()
 
-    def write(self, filename):
+    def write(self, filename, format='ttl'):
         if path.splitext(filename)[1] != ".ttl":
             filename += ".ttl"
         with open(filename, 'wb') as f:
-            self.writer.writer.serialize(destination=f)
+            self.writer.writer.serialize(destination=f, format=format)
 
     def declare_properties(self):
         # AnnotionProperty
@@ -397,8 +397,8 @@ class GoCamModel():
 class AssocGoCamModel(GoCamModel):
     ENABLES_O_RELATION_LOOKUP = {}
 
-    def __init__(self, modeltitle, assocs, connection_relations=None):
-        GoCamModel.__init__(self, modeltitle, connection_relations)
+    def __init__(self, modeltitle, assocs, connection_relations=None, store=None):
+        GoCamModel.__init__(self, modeltitle, connection_relations, store)
         self.associations = CollapsedAssociationSet(assocs)
         self.ontology = None
         self.ro_ontology = None
@@ -730,9 +730,13 @@ class ReferencePreference:
 
 
 class CamTurtleRdfWriter(TurtleRdfWriter):
-    def __init__(self, modeltitle):
+    def __init__(self, modeltitle, store=None):
         self.base = genid(base="http://model.geneontology.org")
-        self.graph = rdflib.Graph(identifier=self.base)
+        if store is not None:
+            graph = rdflib.Graph(identifier=self.base, store=store)
+        else:
+            graph = rdflib.Graph(identifier=self.base)
+        self.graph = graph
         self.graph.bind("owl", OWL)
         self.graph.bind("obo", "http://purl.obolibrary.org/obo/")
         self.graph.bind("dc", DC)
