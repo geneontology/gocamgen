@@ -545,55 +545,57 @@ class AssocGoCamModel(GoCamModel):
                                     chained_rel = self.translate_relation_to_ro(chained_rel_label)
                                 annot_subgraph.add_edge(regulated_term_n, chained_rel, ext_target_n)
                             elif ext_relation in HAS_REGULATION_TARGET_RELATIONS:
-                                buckets = has_regulation_target_bucket(self.ontology, term)
-                                if len(buckets) > 0:
-                                    bucket = buckets[0]  # Or express all buckets?
-                                    # Four buckets
-                                    if bucket in ["a", "d"]:
-                                        regulates_rel, regulated_mf = self.get_rel_and_term_in_logical_definitions(term)
-                                        if regulates_rel and regulated_mf:
-                                            # [GP-A]<-enabled_by-[root MF]-regulates->[molecular function Z]-enabled_by->[GP-B]
-                                            ext_target_n = annot_subgraph.add_instance_of_class(ext_target)
-                                            regulated_mf_n = annot_subgraph.add_instance_of_class(regulated_mf)
-                                            annot_subgraph.add_edge(regulated_mf_n, ro.enabled_by, ext_target_n)
-                                            anchor_n = annot_subgraph.get_anchor()
-                                            annot_subgraph.add_edge(anchor_n, regulates_rel, regulated_mf_n)
-                                            # TODO: Suppress/delete (GP-A)<-enabled_by-(root MF)-part_of->(term) aka involved_in_translated
-                                            # Remove (anchor_uri, None, term)
-                                            # Is this anchor_uri always going to the root_mf?
-                                            # Will the term individual be used for anything else?
-                                            #   Other comma-delimited extensions on same annotation?
-                                            # has_during? occurs_in?
-                                            # WB:WBGene00001173 GO:0051343 ['has_regulation_target', 'occurs_in'] ['a']
-                                            # WB:WBGene00006652 GO:0045944 ['has_regulation_target', 'occurs_in'] ['b']
-                                            # WB:WBGene00003639 GO:0036003 ['happens_during', 'has_regulation_target'] ['b']
-                                            # Other comma-delimited extensions (e.g. happens_during, has_input) need this triple?
-                                            # WB:WBGene00002335 GO:1902685 ['has_regulation_target', 'occurs_in'] ['d']
-                                        else:
-                                            logger.warning("Couldn't get regulates relation and/or regulated term from LD of: {}".format(term))
-                                    elif bucket in ["b", "c"]:
-                                        regulates_rel, regulated_term = self.get_rel_and_term_in_logical_definitions(term)
-                                        if regulates_rel:
-                                            # find 'Y subPropertyOf regulates_rel' in RO where Y will be `causally
-                                            # upstream of` relation
-                                            # Ex. GO:0045944 -> RO:0002213 -> RO:0002304
-                                            # edges(RO:0002213) only returns subProperties. Need superProperties
-                                            # Gettin super properties
-                                            causally_upstream_relation = self.get_causally_upstream_relation(regulates_rel)
-                                            # GP-A<-enabled_by-[root MF]-part_of->[regulation of Z]-has_input->GP-B,-causally upstream of (positive/negative effect)->[root MF]-enabled_by->GP-B
-                                            ext_target_n = annot_subgraph.add_instance_of_class(ext_target)
-                                            anchor_n = annot_subgraph.get_anchor()  # TODO: Gotta find MF. MF no longer anchor if primary term is BP
-                                            annot_subgraph.add_edge(anchor_n, INPUT_RELATIONS["has input"], ext_target_n)
-                                            root_mf_b_n = annot_subgraph.add_instance_of_class(upt.molecular_function)
-                                            annot_subgraph.add_edge(anchor_n, causally_upstream_relation, root_mf_b_n)
-                                            annot_subgraph.add_edge(root_mf_b_n, ro.enabled_by, ext_target_n)
-                                            # WB:WBGene00001574 GO:1903363 ['happens_during', 'has_regulation_target'] ['c', 'd']
-                                        else:
-                                            logger.warning("Couldn't get regulates relation from LD of: {}".format(term))
-                            # else:
-                            #     # No RO term yet. Try looking up in RO
-                            #     relation_term = self.translate_relation_to_ro(ext_relation)
-                            #     INPUT_RELATIONS[ext_relation] = relation_term
+                                if aspect == 'P':
+                                    # For BP annotations, translate 'has regulation target' to 'has input'.
+                                    ext_target_n = annot_subgraph.add_instance_of_class(ext_target)
+                                    anchor_n = annot_subgraph.get_anchor()
+                                    annot_subgraph.add_edge(anchor_n, INPUT_RELATIONS['has_input'], ext_target_n)
+                                else:
+                                    buckets = has_regulation_target_bucket(self.ontology, term)
+                                    if len(buckets) > 0:
+                                        bucket = buckets[0]  # Or express all buckets?
+                                        # Four buckets
+                                        if bucket in ["a", "d"]:
+                                            regulates_rel, regulated_mf = self.get_rel_and_term_in_logical_definitions(term)
+                                            if regulates_rel and regulated_mf:
+                                                # [GP-A]<-enabled_by-[root MF]-regulates->[molecular function Z]-enabled_by->[GP-B]
+                                                ext_target_n = annot_subgraph.add_instance_of_class(ext_target)
+                                                regulated_mf_n = annot_subgraph.add_instance_of_class(regulated_mf)
+                                                annot_subgraph.add_edge(regulated_mf_n, ro.enabled_by, ext_target_n)
+                                                anchor_n = annot_subgraph.get_anchor()
+                                                annot_subgraph.add_edge(anchor_n, regulates_rel, regulated_mf_n)
+                                                # TODO: Suppress/delete (GP-A)<-enabled_by-(root MF)-part_of->(term) aka involved_in_translated
+                                                # Remove (anchor_uri, None, term)
+                                                # Is this anchor_uri always going to the root_mf?
+                                                # Will the term individual be used for anything else?
+                                                #   Other comma-delimited extensions on same annotation?
+                                                # has_during? occurs_in?
+                                                # WB:WBGene00001173 GO:0051343 ['has_regulation_target', 'occurs_in'] ['a']
+                                                # WB:WBGene00006652 GO:0045944 ['has_regulation_target', 'occurs_in'] ['b']
+                                                # WB:WBGene00003639 GO:0036003 ['happens_during', 'has_regulation_target'] ['b']
+                                                # Other comma-delimited extensions (e.g. happens_during, has_input) need this triple?
+                                                # WB:WBGene00002335 GO:1902685 ['has_regulation_target', 'occurs_in'] ['d']
+                                            else:
+                                                logger.warning("Couldn't get regulates relation and/or regulated term from LD of: {}".format(term))
+                                        elif bucket in ["b", "c"]:
+                                            regulates_rel, regulated_term = self.get_rel_and_term_in_logical_definitions(term)
+                                            if regulates_rel:
+                                                # find 'Y subPropertyOf regulates_rel' in RO where Y will be `causally
+                                                # upstream of` relation
+                                                # Ex. GO:0045944 -> RO:0002213 -> RO:0002304
+                                                # edges(RO:0002213) only returns subProperties. Need superProperties
+                                                # Gettin super properties
+                                                causally_upstream_relation = self.get_causally_upstream_relation(regulates_rel)
+                                                # GP-A<-enabled_by-[root MF]-part_of->[regulation of Z]-has_input->GP-B,-causally upstream of (positive/negative effect)->[root MF]-enabled_by->GP-B
+                                                ext_target_n = annot_subgraph.add_instance_of_class(ext_target)
+                                                anchor_n = annot_subgraph.get_anchor()  # TODO: Gotta find MF. MF no longer anchor if primary term is BP
+                                                annot_subgraph.add_edge(anchor_n, INPUT_RELATIONS["has input"], ext_target_n)
+                                                root_mf_b_n = annot_subgraph.add_instance_of_class(upt.molecular_function)
+                                                annot_subgraph.add_edge(anchor_n, causally_upstream_relation, root_mf_b_n)
+                                                annot_subgraph.add_edge(root_mf_b_n, ro.enabled_by, ext_target_n)
+                                                # WB:WBGene00001574 GO:1903363 ['happens_during', 'has_regulation_target'] ['c', 'd']
+                                            else:
+                                                logger.warning("Couldn't get regulates relation from LD of: {}".format(term))
 
                     else:
                         logger.debug("BAD: {}".format(ext_str))
