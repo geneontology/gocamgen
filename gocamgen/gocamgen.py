@@ -82,6 +82,10 @@ HAS_REGULATION_TARGET_RELATIONS = {
     # WB:WBGene00013591 involved_in GO:0042594
     "has_regulation_target": ""
 }
+REGULATES_CHAIN_RELATIONS = [
+    "regulates_o_occurs_in",
+    "regulates_o_acts_on_population_of"
+]
 
 
 SHEX_HELPER = ShexHelper()
@@ -527,6 +531,19 @@ class AssocGoCamModel(GoCamModel):
                                 # Need to find what mf we're talking about
                                 anchor_n = annot_subgraph.get_anchor()
                                 annot_subgraph.add_edge(anchor_n, INPUT_RELATIONS[ext_relation], ext_target_n)
+                            elif ext_relation in REGULATES_CHAIN_RELATIONS:
+                                # Get target MF from primary term (BP) e.g. GO:0007346 regulates some mitotic cell cycle
+                                regulates_rel, regulated_term = self.get_rel_and_term_in_logical_definitions(term)
+                                regulated_term_n = annot_subgraph.add_instance_of_class(regulated_term)
+                                anchor_n = annot_subgraph.get_anchor()
+                                annot_subgraph.add_edge(anchor_n, regulates_rel, regulated_term_n)
+                                ext_target_n = annot_subgraph.add_instance_of_class(ext_target)
+                                # Need to derive chained relation (e.g. "occurs_in") from this ext rel. Just replace("regulates_o_", "")?
+                                chained_rel_label = ext_relation.replace("regulates_o_", "")
+                                chained_rel = INPUT_RELATIONS.get(chained_rel_label)
+                                if chained_rel is None:
+                                    chained_rel = self.translate_relation_to_ro(chained_rel_label)
+                                annot_subgraph.add_edge(regulated_term_n, chained_rel, ext_target_n)
                             elif ext_relation in HAS_REGULATION_TARGET_RELATIONS:
                                 buckets = has_regulation_target_bucket(self.ontology, term)
                                 if len(buckets) > 0:
